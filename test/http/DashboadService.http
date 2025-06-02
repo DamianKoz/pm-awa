@@ -1,0 +1,53 @@
+@server = http://localhost:4004
+@auth = Authorization: Basic alice:
+
+
+### Readings
+# @name Readings_GET
+GET {{server}}/odata/v4/dashboad/Readings
+{{auth}}
+
+
+### Readings
+# @name Readings_POST
+POST {{server}}/odata/v4/dashboad/Readings
+Content-Type: application/json
+{{auth}}
+
+{
+  "ID": "18524416-e156-40cc-b421-0c14b364261f",
+  "DeviceID": "18524416-7f44-4c08-b23d-7170709f9915",
+  "SensorID": "18524416-0db5-474f-902c-4a3a41a4865d",
+  "Timestamp": "2015-01-30T23:00:00.000Z",
+  "Value": 77.12,
+  "Unit": "Unit-18524416",
+  "Status": "Status-18524416",
+  "Notes": "Notes-18524416",
+  "CreatedAt": "2010-01-20T23:00:00.000Z"
+}
+
+
+### Readings
+# @name Readings_PATCH
+PATCH {{server}}/odata/v4/dashboad/Readings/18524416-e156-40cc-b421-0c14b364261f
+Content-Type: application/json
+{{auth}}
+
+{
+  "ID": "18524416-e156-40cc-b421-0c14b364261f",
+  "DeviceID": "18524416-7f44-4c08-b23d-7170709f9915",
+  "SensorID": "18524416-0db5-474f-902c-4a3a41a4865d",
+  "Timestamp": "2015-01-30T23:00:00.000Z",
+  "Value": 77.12,
+  "Unit": "Unit-18524416",
+  "Status": "Status-18524416",
+  "Notes": "Notes-18524416",
+  "CreatedAt": "2010-01-20T23:00:00.000Z"
+}
+
+
+### Readings
+# @name Readings_DELETE
+DELETE {{server}}/odata/v4/dashboad/Readings/18524416-e156-40cc-b421-0c14b364261f
+Content-Type: application/json
+{{auth}}
