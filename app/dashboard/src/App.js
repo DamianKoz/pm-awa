@@ -17,9 +17,13 @@ import {
   AlertTriangle,
   CheckCircle,
   Activity,
+  Moon,
+  Sun,
+  ChevronRight,
 } from "lucide-react";
 
 const App = () => {
+  const [darkMode, setDarkMode] = useState(false);
   const [sensors, setSensors] = useState({
     temperature: {value: 75, isRunning: false, history: [], warning: false},
     oilLevel: {value: 85, isRunning: false, history: [], warning: false},
@@ -186,6 +190,15 @@ const App = () => {
     calculatePredictions();
   }, [sensors, calculatePredictions]);
 
+  // Add this after the existing state declarations
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
   const toggleSensor = (sensorName) => {
     setSensors((prev) => ({
       ...prev,
@@ -227,32 +240,47 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} p-6`}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Predictive Maintenance Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Echtzeitüberwachung und Ausfallvorhersage für Industrieanlagen
-          </p>
+        <div className="relative mb-12 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white shadow-xl">
+          <div className="absolute inset-0 bg-grid-white/10" />
+          <div className="relative">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-4xl font-bold mb-3 tracking-tight">
+                  Predictive Maintenance Dashboard
+                </h1>
+                <p className="text-blue-100 text-lg">
+                  Echtzeitüberwachung und Ausfallvorhersage für Industrieanlagen
+                </p>
+              </div>
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Control Panel */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className={`rounded-xl shadow-lg p-6 mb-8 transition-colors duration-300 ${
+          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+        }`}>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Steuerung</h2>
-            <div className="flex gap-2">
+            <h2 className="text-xl font-semibold">Steuerung</h2>
+            <div className="flex gap-3">
               <button
                 onClick={refillOil}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 shadow-md"
               >
                 Öl nachfüllen
               </button>
               <button
                 onClick={resetSensors}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all transform hover:scale-105 shadow-md"
               >
                 <RefreshCw size={16} className="inline mr-2" />
                 Reset
@@ -268,70 +296,87 @@ const App = () => {
             return (
               <div
                 key={sensorName}
-                className="bg-white rounded-lg shadow-md p-6"
+                className={`rounded-xl shadow-lg p-6 transition-all duration-300 transform hover:scale-[1.02] ${
+                  darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+                } ${sensor.warning ? 'ring-2 ring-red-500' : ''}`}
               >
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center">
-                    <span className="text-2xl mr-2">{config.icon}</span>
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {config.name}
-                    </h3>
+                    <span className="text-3xl mr-3">{config.icon}</span>
+                    <h3 className="text-lg font-semibold">{config.name}</h3>
                   </div>
                   {sensor.warning && (
-                    <AlertTriangle className="text-red-500" size={20} />
+                    <div className="animate-pulse">
+                      <AlertTriangle className="text-red-500" size={24} />
+                    </div>
                   )}
                 </div>
 
                 <div className="mb-4">
                   <div
-                    className="text-3xl font-bold mb-1"
+                    className="text-4xl font-bold mb-2 tracking-tight"
                     style={{color: config.color}}
                   >
                     {sensor.value.toFixed(1)}
-                    <span className="text-lg text-gray-500 ml-1">
+                    <span className={`text-lg ml-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                       {config.unit}
                     </span>
                   </div>
                   <div
-                    className={`text-sm ${
-                      sensor.warning ? "text-red-600" : "text-green-600"
+                    className={`text-sm font-medium ${
+                      sensor.warning ? 'text-red-500' : 'text-green-500'
                     }`}
                   >
-                    {sensor.warning ? "Warnung" : "Normal"}
+                    {sensor.warning ? 'Warnung' : 'Normal'}
                   </div>
                 </div>
 
                 <button
                   onClick={() => toggleSensor(sensorName)}
-                  className={`w-full py-2 px-4 rounded-md transition-colors ${
+                  className={`w-full py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.02] ${
                     sensor.isRunning
-                      ? "bg-red-600 hover:bg-red-700 text-white"
-                      : "bg-green-600 hover:bg-green-700 text-white"
-                  }`}
+                      ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                  } shadow-md`}
                 >
                   {sensor.isRunning ? (
                     <>
-                      <Pause size={16} className="inline mr-2" />
+                      <Pause size={18} className="inline mr-2" />
                       Stoppen
                     </>
                   ) : (
                     <>
-                      <Play size={16} className="inline mr-2" />
+                      <Play size={18} className="inline mr-2" />
                       Starten
                     </>
                   )}
                 </button>
 
                 {sensor.history.length > 0 && (
-                  <div className="mt-4 h-20">
+                  <div className="mt-4 h-24">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={formatChartData(sensorName)}>
+                        <defs>
+                          <linearGradient id={`gradient-${sensorName}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={config.color} stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor={config.color} stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
                         <Line
                           type="monotone"
                           dataKey="value"
                           stroke={config.color}
                           strokeWidth={2}
                           dot={false}
+                          animationDuration={2000}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: darkMode ? '#1f2937' : 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                          }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -344,56 +389,57 @@ const App = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Predictions */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              <Activity className="inline mr-2" />
+          <div className={`rounded-xl shadow-lg p-6 transition-colors duration-300 ${
+            darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+          }`}>
+            <h2 className="text-xl font-semibold mb-6 flex items-center">
+              <Activity className="mr-2" />
               Ausfallvorhersagen
             </h2>
             {predictions.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-12">
                 <CheckCircle
-                  size={48}
-                  className="mx-auto mb-4 text-green-500"
+                  size={64}
+                  className="mx-auto mb-4 text-green-500 animate-bounce"
                 />
-                <p>Alle Systeme funktionieren optimal</p>
+                <p className={`text-lg ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Alle Systeme funktionieren optimal
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
                 {predictions.map((prediction, index) => (
                   <div
                     key={index}
-                    className={`border-l-4 pl-4 py-3 ${
+                    className={`border-l-4 pl-4 py-4 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] ${
                       prediction.priority === "Hoch"
-                        ? "border-red-500 bg-red-50"
+                        ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                         : prediction.priority === "Mittel"
-                        ? "border-yellow-500 bg-yellow-50"
-                        : "border-blue-500 bg-blue-50"
+                        ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
+                        : "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                     }`}
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold text-gray-800">
-                          {prediction.component}
-                        </h3>
-                        <p className="text-sm text-gray-600">
+                        <h3 className="font-semibold">{prediction.component}</h3>
+                        <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                           {prediction.reason}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                           Konfidenz: {prediction.confidence}%
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-gray-800">
-                          {prediction.daysUntil} Tag
-                          {prediction.daysUntil !== 1 ? "e" : ""}
+                        <div className="text-lg font-bold">
+                          {prediction.daysUntil} Tag{prediction.daysUntil !== 1 ? "e" : ""}
                         </div>
                         <div
-                          className={`text-xs px-2 py-1 rounded ${
+                          className={`text-xs px-2 py-1 rounded-full mt-1 ${
                             prediction.priority === "Hoch"
-                              ? "bg-red-100 text-red-700"
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
                               : prediction.priority === "Mittel"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-blue-100 text-blue-700"
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300"
+                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
                           }`}
                         >
                           {prediction.priority}
@@ -407,23 +453,30 @@ const App = () => {
           </div>
 
           {/* Maintenance History */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Wartungshistorie
-            </h2>
-            <div className="space-y-3">
+          <div className={`rounded-xl shadow-lg p-6 transition-colors duration-300 ${
+            darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+          }`}>
+            <h2 className="text-xl font-semibold mb-6">Wartungshistorie</h2>
+            <div className="space-y-4">
               {maintenanceHistory.map((entry, index) => (
-                <div key={index} className="border-b border-gray-200 pb-3">
+                <div 
+                  key={index} 
+                  className={`border-b last:border-b-0 pb-4 transition-all duration-300 transform hover:scale-[1.02] ${
+                    darkMode ? 'border-gray-700' : 'border-gray-200'
+                  }`}
+                >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-medium text-gray-800">
-                        {entry.component}
-                      </h3>
-                      <p className="text-sm text-gray-600">{entry.type}</p>
+                      <h3 className="font-medium">{entry.component}</h3>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {entry.type}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">{entry.date}</div>
-                      <div className="text-xs text-green-600">
+                      <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {entry.date}
+                      </div>
+                      <div className="text-xs text-green-500 font-medium mt-1">
                         {entry.status}
                       </div>
                     </div>
@@ -435,11 +488,11 @@ const App = () => {
         </div>
 
         {/* System Overview Chart */}
-        <div className="bg-white rounded-lg shadow-md p-6 mt-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            Systemübersicht
-          </h2>
-          <div className="h-64">
+        <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${
+          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+        }`}>
+          <h2 className="text-xl font-semibold mb-6">Systemübersicht</h2>
+          <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={[
@@ -465,11 +518,30 @@ const App = () => {
                   },
                 ]}
               >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" />
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  stroke={darkMode ? '#374151' : '#e5e7eb'} 
+                />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fill: darkMode ? '#9ca3af' : '#4b5563' }}
+                />
+                <YAxis 
+                  tick={{ fill: darkMode ? '#9ca3af' : '#4b5563' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: darkMode ? '#1f2937' : 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                  }}
+                />
+                <Bar 
+                  dataKey="value" 
+                  radius={[4, 4, 0, 0]}
+                  animationDuration={2000}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
