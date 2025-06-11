@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from "react";
+import React, {useState, useEffect, useCallback, useRef} from "react";
 import {
   LineChart,
   Line,
@@ -7,6 +7,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ScatterChart,
+  Scatter,
   BarChart,
   Bar,
 } from "recharts";
@@ -20,18 +22,25 @@ import {
   Moon,
   Sun,
   ChevronRight,
+  X,
+  Zap,
+  Truck,
+  Bell,
+  FlaskConical,
+  ChevronLeft,
+  Car,
+  Bus,
 } from "lucide-react";
+
+// NOTE: This file is plain JavaScript. Any previous TypeScript-style type
+// declarations have been removed for compatibility. Feel free to migrate to
+// TypeScript (`.tsx`) in the future.
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(false);
-  const [sensors, setSensors] = useState({
-    temperature: {value: 75, isRunning: false, history: [], warning: false},
-    oilLevel: {value: 85, isRunning: false, history: [], warning: false},
-    vibration: {value: 2.1, isRunning: false, history: [], warning: false},
-    pressure: {value: 120, isRunning: false, history: [], warning: false},
-  });
-
-  const [predictions, setPredictions] = useState([]);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [vehicles, setVehicles] = useState([]);
+  const [fleetPredictions, setFleetPredictions] = useState([]);
   const [maintenanceHistory] = useState([
     {
       date: "2024-05-20",
@@ -53,142 +62,235 @@ const App = () => {
     },
   ]);
 
-  // Sensor simulation logic
-  const updateSensor = useCallback((sensorName) => {
-    setSensors((prev) => {
-      const sensor = prev[sensorName];
-      if (!sensor.isRunning) return prev;
+  // Timeline of issues/warnings
+  const [timeline, setTimeline] = useState([]); // {time, title, description, type}
 
-      let newValue = sensor.value;
+  // Toast-like notifications
+  const [notifications, setNotifications] = useState([]); // {id, message, type, unread}
+  const [showInbox, setShowInbox] = useState(false);
+
+  // Track previous sensor warnings to detect new ones
+  const prevVehiclesRef = useRef(vehicles);
+
+  // Sensor simulation logic
+  const updateVehicleMetric = useCallback((vehicleId, metricKey) => {
+    setVehicles((prev) => {
+      const vehicle = prev.find(v => v.id === vehicleId);
+      if (!vehicle) return prev;
+
+      let newValue = vehicle.metrics[metricKey];
       const timestamp = Date.now();
 
-      switch (sensorName) {
-        case "temperature":
-          // Temperature occasionally spikes up
+      switch (metricKey) {
+        case "engineTemp":
           newValue =
-            Math.random() > 0.8
-              ? Math.min(100, sensor.value + Math.random() * 5)
-              : Math.max(70, sensor.value + (Math.random() - 0.5) * 2);
+            Math.random() > 0.95
+              ? Math.min(100, vehicle.metrics[metricKey] + (Math.random() - 0.5) * 2)
+              : Math.max(70, vehicle.metrics[metricKey] + (Math.random() - 0.5) * 0.5);
           break;
         case "oilLevel":
-          // Oil level gradually decreases
-          newValue = Math.max(0, sensor.value - Math.random() * 0.5);
+          newValue = Math.max(0, vehicle.metrics[metricKey] - Math.random() * 0.25);
           break;
-        case "vibration":
-          // Vibration increases with oil level decrease and temperature increase
-          const tempFactor = (prev.temperature.value - 70) / 30;
-          const oilFactor = (90 - prev.oilLevel.value) / 90;
-          newValue = 2.0 + tempFactor * 3 + oilFactor * 2 + Math.random() * 0.5;
+        case "tyrePressure":
+          const oilRatio = vehicle.metrics.oilLevel / 100;
+          newValue = 90 + oilRatio * 25 + (Math.random() - 0.5) * 5;
           break;
-        case "pressure":
-          // Pressure varies with oil level
-          const oilRatio = prev.oilLevel.value / 100;
-          newValue = 80 + oilRatio * 60 + (Math.random() - 0.5) * 10;
+        case "batteryHealth":
+          newValue = Math.max(0, vehicle.metrics[metricKey] - Math.random() * 0.1);
           break;
         default:
           break;
       }
 
       const newHistory = [
-        ...sensor.history,
+        ...vehicle.history[metricKey],
         {time: timestamp, value: newValue},
       ].slice(-20); // Keep only last 20 points
 
       const warning =
-        (sensorName === "temperature" && newValue > 90) ||
-        (sensorName === "oilLevel" && newValue < 20) ||
-        (sensorName === "vibration" && newValue > 5) ||
-        (sensorName === "pressure" && newValue < 90);
+        (metricKey === "engineTemp" && newValue > 90) ||
+        (metricKey === "oilLevel" && newValue < 20) ||
+        (metricKey === "tyrePressure" && newValue < 90) ||
+        (metricKey === "batteryHealth" && newValue < 20);
 
-      return {
-        ...prev,
-        [sensorName]: {
-          ...sensor,
-          value: newValue,
-          history: newHistory,
-          warning,
-        },
-      };
+      return prev.map(v =>
+        v.id === vehicleId
+          ? {
+              ...v,
+              metrics: {
+                ...v.metrics,
+                [metricKey]: newValue,
+              },
+              history: {
+                ...v.history,
+                [metricKey]: newHistory,
+              },
+              warnings: {
+                ...v.warnings,
+                [metricKey]: warning,
+              },
+            }
+          : v
+      );
     });
   }, []);
 
   // Calculate predictions based on sensor values
-  const calculatePredictions = useCallback(() => {
-    const temp = sensors.temperature.value;
-    const oil = sensors.oilLevel.value;
-    const vibration = sensors.vibration.value;
-    const pressure = sensors.pressure.value;
-
+  const calculateFleetPredictions = useCallback(() => {
     const predictions = [];
 
-    // Oil change prediction
-    if (oil < 50) {
-      const daysUntilCritical = Math.max(1, Math.floor(oil / 2));
-      predictions.push({
-        component: "Ölwechsel",
-        daysUntil: daysUntilCritical,
-        confidence: 95,
-        priority: oil < 20 ? "Hoch" : "Mittel",
-        reason: `Ölstand bei ${oil.toFixed(1)}%`,
-      });
-    }
+    vehicles.forEach(vehicle => {
+      const {id, name, metrics} = vehicle;
 
-    // Temperature-based maintenance
-    if (temp > 85) {
-      const daysUntil = Math.max(1, Math.floor((100 - temp) * 2));
-      predictions.push({
-        component: "Kühlsystem",
-        daysUntil,
-        confidence: 87,
-        priority: temp > 95 ? "Hoch" : "Mittel",
-        reason: `Temperatur bei ${temp.toFixed(1)}°C`,
-      });
-    }
+      // Oil change prediction
+      if (metrics.oilLevel < 50) {
+        const daysUntilCritical = Math.max(1, Math.floor(metrics.oilLevel / 2));
+        predictions.push({
+          component: "Ölwechsel",
+          daysUntil: daysUntilCritical,
+          confidence: 95,
+          priority: metrics.oilLevel < 20 ? "Hoch" : "Mittel",
+          reason: `Ölstand bei ${metrics.oilLevel.toFixed(1)}%`,
+          vehicleId: id,
+        });
+      }
 
-    // Vibration-based maintenance
-    if (vibration > 4) {
-      const daysUntil = Math.max(1, Math.floor((8 - vibration) * 3));
-      predictions.push({
-        component: "Lager/Ausrichtung",
-        daysUntil,
-        confidence: 82,
-        priority: vibration > 6 ? "Hoch" : "Mittel",
-        reason: `Vibration bei ${vibration.toFixed(1)} mm/s`,
-      });
-    }
+      // Temperature-based maintenance
+      if (metrics.engineTemp > 85) {
+        const daysUntil = Math.max(1, Math.floor((100 - metrics.engineTemp) * 2));
+        predictions.push({
+          component: "Kühlsystem",
+          daysUntil,
+          confidence: 87,
+          priority: metrics.engineTemp > 95 ? "Hoch" : "Mittel",
+          reason: `Temperatur bei ${metrics.engineTemp.toFixed(1)}°C`,
+          vehicleId: id,
+        });
+      }
 
-    // Pressure-based maintenance
-    if (pressure < 100) {
-      const daysUntil = Math.max(1, Math.floor(pressure / 5));
-      predictions.push({
-        component: "Drucksystem",
-        daysUntil,
-        confidence: 78,
-        priority: pressure < 80 ? "Hoch" : "Niedrig",
-        reason: `Druck bei ${pressure.toFixed(1)} bar`,
-      });
-    }
+      // Pressure-based maintenance
+      if (metrics.tyrePressure < 100) {
+        const daysUntil = Math.max(1, Math.floor(metrics.tyrePressure / 5));
+        predictions.push({
+          component: "Reifendruck",
+          daysUntil,
+          confidence: 78,
+          priority: metrics.tyrePressure < 80 ? "Hoch" : "Niedrig",
+          reason: `Reifendruck bei ${metrics.tyrePressure.toFixed(1)} bar`,
+          vehicleId: id,
+        });
+      }
+
+      // Battery health prediction
+      if (metrics.batteryHealth < 20) {
+        const daysUntil = Math.max(1, Math.floor(20 / metrics.batteryHealth));
+        predictions.push({
+          component: "Batteriewechsel",
+          daysUntil,
+          confidence: 85,
+          priority: "Hoch",
+          reason: `Batteriekapazität bei ${metrics.batteryHealth.toFixed(1)}%`,
+          vehicleId: id,
+        });
+      }
+    });
 
     // Sort by days until maintenance needed
     predictions.sort((a, b) => a.daysUntil - b.daysUntil);
-    setPredictions(predictions.slice(0, 5)); // Show top 5 predictions
-  }, [sensors]);
+    setFleetPredictions(predictions);
 
-  // Update sensors every 2 seconds
+    // Push notifications for high priority predictions (limit 5)
+    predictions.filter(p=>p.priority==='Hoch').slice(0,5).forEach((pred) => {
+      const id = Date.now() + Math.random();
+      const msg = `${pred.component}: ${pred.reason.split('bei')[0].trim()} (${pred.daysUntil} Tage)`;
+      setNotifications((prev) => {
+        if(prev.some(n=>n.message===msg && n.vehicleId===pred.vehicleId)) return prev;
+        return [
+          ...prev,
+          {
+            id,
+            message: msg,
+            type: "prediction",
+            vehicleId: pred.vehicleId,
+            unread: true,
+          },
+        ];
+      });
+
+      setTimeline((prev) => [
+        {
+          time: new Date(),
+          title: "Hohe Ausfallwahrscheinlichkeit",
+          description: `${pred.component} | ${pred.reason}`,
+          type: "prediction",
+          vehicleId: pred.vehicleId,
+        },
+        ...prev,
+      ]);
+    });
+  }, [vehicles]);
+
+  // Update sensors every 6 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      Object.keys(sensors).forEach((sensorName) => {
-        updateSensor(sensorName);
+      vehicles.forEach((vehicle) => {
+        Object.keys(vehicle.metrics).forEach((metricKey) => {
+          updateVehicleMetric(vehicle.id, metricKey);
+        });
       });
-    }, 2000);
+    }, 6000);
 
     return () => clearInterval(interval);
-  }, [sensors, updateSensor]);
+  }, [vehicles, updateVehicleMetric]);
 
   // Recalculate predictions when sensors change
   useEffect(() => {
-    calculatePredictions();
-  }, [sensors, calculatePredictions]);
+    calculateFleetPredictions();
+  }, [vehicles, calculateFleetPredictions]);
+
+  // Detect new sensor warnings
+  useEffect(() => {
+    const prev = prevVehiclesRef.current;
+    vehicles.forEach((vehicle) => {
+      Object.entries(vehicle.metrics).forEach(([metricKey, value]) => {
+        const prevVehicle = prev.find(v => v.id === vehicle.id);
+        const prevWarn = prevVehicle ? prevVehicle.warnings[metricKey] : false;
+        const currentWarn = vehicle.warnings[metricKey];
+        if (!prevWarn && currentWarn) {
+          // New warning occurred
+          const id = Date.now() + Math.random();
+          const message = `${vehicle.name}: Warnung! Wert bei ${value.toFixed(1)}`;
+
+          setNotifications((prevNotifs) => {
+            // avoid duplicates
+            if (prevNotifs.some((n)=>n.message===message && n.vehicleId===vehicle.id)) return prevNotifs;
+            return [
+              ...prevNotifs,
+              {
+                id,
+                message,
+                type: "warning",
+                vehicleId: vehicle.id,
+                unread: true,
+              },
+            ];
+          });
+
+          setTimeline((prevTimeline) => [
+            {
+              time: new Date(),
+              title: "Sensor Warnung",
+              description: message,
+              type: "warning",
+              vehicleId: vehicle.id,
+            },
+            ...prevTimeline,
+          ]);
+        }
+      });
+    });
+    prevVehiclesRef.current = vehicles;
+  }, [vehicles]);
 
   // Add this after the existing state declarations
   useEffect(() => {
@@ -199,87 +301,233 @@ const App = () => {
     }
   }, [darkMode]);
 
-  const toggleSensor = (sensorName) => {
-    setSensors((prev) => ({
-      ...prev,
-      [sensorName]: {
-        ...prev[sensorName],
-        isRunning: !prev[sensorName].isRunning,
-      },
+  // Seed timeline with historic maintenance events on mount
+  useEffect(() => {
+    const historyEvents = maintenanceHistory.map((entry) => ({
+      time: new Date(entry.date),
+      title: "Wartung abgeschlossen",
+      description: `${entry.component} | ${entry.type}`,
+      type: "history",
+      vehicleId: entry.component.split(' ')[1], // Assuming vehicle name is after the first space
     }));
+    setTimeline((prev) => [...historyEvents.reverse(), ...prev]);
+  }, []); // run once after initial mount
+
+  const resetVehicles = () => {
+    const fleet = generateVehicles(vehicleCount);
+    setVehicles(fleet);
+    prevVehiclesRef.current = fleet;
+    setTimeline([]);
+    setNotifications([]);
+    setExpandedVehicles([]);
+    setCurrentPage(0);
   };
 
-  const refillOil = () => {
-    setSensors((prev) => ({
-      ...prev,
-      oilLevel: {...prev.oilLevel, value: 100},
-    }));
+  const vehicleConfigs = {
+    engineTemp: {name: "Temperatur", unit: "°C", color: "#ef4444", icon: "🌡️", max: 100},
+    oilLevel: {name: "Ölstand", unit: "%", color: "#f59e0b", icon: "🛢️", max: 100},
+    tyrePressure: {name: "Reifendruck", unit: "bar", color: "#06b6d4", icon: "⚡", max: 200},
+    batteryHealth: {name: "Batteriekapazität", unit: "%", color: "#8b5cf6", icon: "🔋", max: 100},
   };
 
-  const resetSensors = () => {
-    setSensors({
-      temperature: {value: 75, isRunning: false, history: [], warning: false},
-      oilLevel: {value: 85, isRunning: false, history: [], warning: false},
-      vibration: {value: 2.1, isRunning: false, history: [], warning: false},
-      pressure: {value: 120, isRunning: false, history: [], warning: false},
-    });
-  };
-
-  const sensorConfigs = {
-    temperature: {name: "Temperatur", unit: "°C", color: "#ef4444", icon: "🌡️"},
-    oilLevel: {name: "Ölstand", unit: "%", color: "#f59e0b", icon: "🛢️"},
-    vibration: {name: "Vibration", unit: "mm/s", color: "#8b5cf6", icon: "📳"},
-    pressure: {name: "Druck", unit: "bar", color: "#06b6d4", icon: "⚡"},
-  };
-
-  const formatChartData = (sensorName) => {
-    return sensors[sensorName].history.map((point, index) => ({
+  const formatChartData = (vehicleId, metricKey) => {
+    return vehicles.find(v => v.id === vehicleId)?.history[metricKey]?.map((point, index) => ({
       time: index,
       value: point.value,
-    }));
+    })) || [];
   };
+
+  const dismissNotification = (id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const markAsRead = (id) => {
+    setNotifications((prev) => prev.map(n => n.id === id ? {...n, unread:false} : n));
+  };
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  // Auto-dismiss notifications after 8 seconds
+  useEffect(() => {
+    if (notifications.length === 0) return;
+    const timers = notifications.map((n) =>
+      setTimeout(() => dismissNotification(n.id), 8000)
+    );
+    return () => timers.forEach((t) => clearTimeout(t));
+  }, [notifications]);
+
+  // Prepare timeline graph data
+  const warningData = timeline
+    .filter((e) => e.type === "warning")
+    .map((e) => ({time: e.time.getTime(), y: 1, desc: e.description}));
+  const predictionData = timeline
+    .filter((e) => e.type === "prediction")
+    .map((e) => ({time: e.time.getTime(), y: 2, desc: e.description}));
+  const historyData = timeline
+    .filter((e) => e.type === "history")
+    .map((e) => ({time: e.time.getTime(), y: 0, desc: e.description}));
+
+  // Generate mock vehicles
+  const generateVehicles = useCallback((count) => {
+    const modelPool = [
+      {name:'Mercedes Actros', icon: Truck},
+      {name:'MAN TGX', icon: Truck},
+      {name:'VW Crafter', icon: Car},
+      {name:'Mercedes Sprinter', icon: Car},
+      {name:'Setra S 531 DT', icon: Bus},
+      {name:"MAN Lion's Coach", icon: Bus},
+      {name:'BMW 5er Touring', icon: Car},
+      {name:'Scania R500', icon: Truck},
+      {name:'Scania R450', icon: Truck},
+      {name:'Scania S730', icon: Truck},
+      {name:'Scania P280', icon: Truck},
+      {name:'Scania G500', icon: Truck},
+      {name:'Scania L340', icon: Truck}
+    ];
+    const newFleet = Array.from({length: count}, (_, idx) => {
+      const id = `V-${idx + 1}`;
+      const {name:model, icon:IconComp} = modelPool[Math.floor(Math.random()*modelPool.length)];
+      const year = 2015 + Math.floor(Math.random()*8); // 2015-2022
+      const metrics = {
+        engineTemp: 65 + Math.random() * 30, // 65-95 °C
+        oilLevel: 40 + Math.random() * 60,  // 40-100 %
+        tyrePressure: 85 + Math.random() * 25, // 85-110 bar
+        batteryHealth: 50 + Math.random() * 50, // 50-100 %
+      };
+      const mileage = Math.floor(50000 + Math.random()*150000); // 50k-200k km
+      const lastServiceDateObj = new Date(Date.now() - Math.random()*31536000000); // within last year
+      const lastServiceDate = lastServiceDateObj.toLocaleDateString();
+      const nextServiceDate = new Date(lastServiceDateObj.getTime() + 15552000000).toLocaleDateString(); // +6mo
+      const history = {
+        engineTemp: [{time: Date.now(), value: metrics.engineTemp}],
+        oilLevel: [{time: Date.now(), value: metrics.oilLevel}],
+        tyrePressure: [{time: Date.now(), value: metrics.tyrePressure}],
+        batteryHealth: [{time: Date.now(), value: metrics.batteryHealth}],
+      };
+      const warnings = {
+        engineTemp: metrics.engineTemp > 90,
+        oilLevel: metrics.oilLevel < 20,
+        tyrePressure: metrics.tyrePressure < 90,
+        batteryHealth: metrics.batteryHealth < 20,
+      };
+      return {id, name: `Fahrzeug ${idx + 1}`, model, year, mileage, lastServiceDate, nextServiceDate, metrics, history, warnings, icon: IconComp};
+    });
+    return newFleet;
+  }, []);
+
+  // Slider controlled vehicle count
+  const [vehicleCount, setVehicleCount] = useState(24);
+  const [expandedVehicles, setExpandedVehicles] = useState([]); // ids of expanded tiles
+  const [currentPage, setCurrentPage] = useState(0);
+  const vehiclesPerPage = 24;
+
+  // Regenerate fleet when vehicleCount changes (resetting timeline & notifications)
+  useEffect(() => {
+    const fleet = generateVehicles(vehicleCount);
+    setVehicles(fleet);
+    prevVehiclesRef.current = fleet;
+    setTimeline([]);
+    setNotifications([]);
+    setExpandedVehicles([]);
+    setCurrentPage(0);
+  }, [vehicleCount, generateVehicles]);
+
+  const toggleExpand = (id) => {
+    setExpandedVehicles((prev) => prev.includes(id) ? prev.filter(v=>v!==id) : [...prev, id]);
+  };
+
+  // Add scroll listener effect after darkMode effect
+  useEffect(()=>{
+    const onScroll = () => {
+      setHeaderCollapsed(window.scrollY > 80);
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  },[]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} p-6`}>
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto">
         {/* Header */}
-        <div className="relative mb-12 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white shadow-xl">
-          <div className="absolute inset-0 bg-grid-white/10" />
-          <div className="relative">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-4xl font-bold mb-3 tracking-tight">
-                  Predictive Maintenance Dashboard
-                </h1>
-                <p className="text-blue-100 text-lg">
-                  Echtzeitüberwachung und Ausfallvorhersage für Industrieanlagen
-                </p>
+        <header className={`sticky top-0 z-40 mb-12 transition-all duration-300 ${headerCollapsed?'backdrop-blur bg-indigo-700/90':'bg-transparent'}`} style={{overflow:'visible'}}>
+          <div className={`relative overflow-visible rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 transition-all duration-300 text-white shadow-xl ${headerCollapsed?'p-4':'p-8'}`}>
+            <div className="absolute inset-0 bg-grid-white/10" />
+            <div className="relative">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h1 className={`font-bold tracking-tight transition-all duration-300 ${headerCollapsed?'text-xl':'text-4xl mb-3'}`}>
+                    Predictive Maintenance Dashboard
+                  </h1>
+                  {!headerCollapsed && (
+                    <p className="text-blue-100 text-lg">
+                      Echtzeitüberwachung und Ausfallvorhersage für Industrieanlagen
+                    </p>) }
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
+                  </button>
+                  {/* Bell */}
+                  <div className="relative">
+                    <button onClick={()=>setShowInbox(s=>!s)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                      <Bell size={18} />
+                    </button>
+                    {unreadCount>0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] rounded-full px-1">{unreadCount}</span>}
+                    {showInbox && (
+                      <div className={`absolute right-0 mt-2 w-72 max-h-96 overflow-y-auto rounded-lg shadow-xl p-4 z-50 ${darkMode? 'bg-gray-800 text-white':'bg-white'}`} style={{overflow:'visible'}}>
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="font-semibold text-sm">Benachrichtigungen</h3>
+                          <button onClick={()=>setNotifications([])} className="text-xs hover:underline">Alle löschen</button>
+                        </div>
+                        {notifications.length===0 ? <p className="text-xs text-gray-500">Keine Benachrichtigungen</p> : (
+                          <ul className="space-y-2">
+                            {notifications.slice().reverse().map(notif=> (
+                              <li key={notif.id} className={`p-2 rounded-md flex items-start justify-between ${notif.unread? (darkMode?'bg-gray-700':'bg-indigo-50'):''}`}>
+                                <div className="flex items-start gap-2">
+                                  {notif.type==='warning'? <AlertTriangle size={14} className="text-red-500"/> : <Zap size={14} className="text-indigo-500"/>}
+                                  <span className="text-xs leading-snug">{notif.message}</span>
+                                </div>
+                                <button onClick={()=>dismissNotification(notif.id)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs">×</button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
-              </button>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Control Panel */}
         <div className={`rounded-xl shadow-lg p-6 mb-8 transition-colors duration-300 ${
           darkMode ? 'bg-gray-800 text-white' : 'bg-white'
         }`}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Steuerung</h2>
-            <div className="flex gap-3">
+          <div className="flex justify-between items-start mb-4 flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-semibold mb-1">Steuerung</h2>
+              <p className="text-xs opacity-60">Warnschwellen (ML-Vorhersage)</p>
+            </div>
+            <div className="flex gap-6 flex-wrap items-center">
+              <div className="flex items-center gap-3">
+                <label htmlFor="vehicleCount" className="text-sm whitespace-nowrap">Fahrzeuge: <span className="font-semibold">{vehicleCount}</span></label>
+                <input
+                  id="vehicleCount"
+                  type="range"
+                  min="5"
+                  max="200"
+                  value={vehicleCount}
+                  onChange={(e) => setVehicleCount(Number(e.target.value))}
+                  className="accent-blue-600 cursor-pointer"
+                />
+              </div>
               <button
-                onClick={refillOil}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 shadow-md"
-              >
-                Öl nachfüllen
-              </button>
-              <button
-                onClick={resetSensors}
+                onClick={resetVehicles}
                 className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all transform hover:scale-105 shadow-md"
               >
                 <RefreshCw size={16} className="inline mr-2" />
@@ -287,99 +535,113 @@ const App = () => {
               </button>
             </div>
           </div>
+
+          {/* Threshold chips with mock distribution tooltip */}
+          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 select-none">
+              <FlaskConical size={12}/> ML&nbsp;Thresholds
+            </span>
+            {[
+              {label:'Temp > 90°C', bg:'#fee2e2', fg:'#b91c1c', mean:75, sd:7, unit:'°C'},
+              {label:'Öl < 20%', bg:'#fef9c3', fg:'#92400e', mean:65, sd:15, unit:'%'},
+              {label:'Druck < 90 bar', bg:'#dbeafe', fg:'#1e40af', mean:110, sd:10, unit:'bar'},
+              {label:'Batterie < 20%', bg:'#ede9fe', fg:'#5b21b6', mean:60, sd:20, unit:'%'}
+            ].map((t,i)=>(
+              <span key={i} style={{backgroundColor:t.bg,color:t.fg}} className="relative group px-2 py-1 rounded-full select-none text-[11px] cursor-default">
+                {t.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Sensors Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {Object.entries(sensors).map(([sensorName, sensor]) => {
-            const config = sensorConfigs[sensorName];
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 mb-8">
+          {vehicles.slice(currentPage*vehiclesPerPage, (currentPage+1)*vehiclesPerPage).map((vehicle) => {
+            const isExpanded = expandedVehicles.includes(vehicle.id);
+            const vehiclePreds = fleetPredictions.filter(p=>p.vehicleId===vehicle.id);
             return (
               <div
-                key={sensorName}
-                className={`rounded-xl shadow-lg p-6 transition-all duration-300 transform hover:scale-[1.02] ${
-                  darkMode ? 'bg-gray-800 text-white' : 'bg-white'
-                } ${sensor.warning ? 'ring-2 ring-red-500' : ''}`}
+                key={vehicle.id}
+                onClick={()=>toggleExpand(vehicle.id)}
+                className={`rounded-xl shadow-lg ${isExpanded? 'p-6' : 'p-4'} transition-all duration-300 transform hover:scale-[1.02] cursor-pointer ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}
               >
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center">
-                    <span className="text-3xl mr-3">{config.icon}</span>
-                    <h3 className="text-lg font-semibold">{config.name}</h3>
-                  </div>
-                  {sensor.warning && (
-                    <div className="animate-pulse">
-                      <AlertTriangle className="text-red-500" size={24} />
+                    {React.createElement(vehicle.icon, {size:24,className:"mr-2 text-blue-600 dark:text-blue-400"})}
+                    <div>
+                      <h3 className="text-sm font-semibold">{vehicle.name}</h3>
+                      <p className="text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}">{vehicle.model} · {vehicle.year}</p>
                     </div>
-                  )}
+                  </div>
+                  <span className="text-xs opacity-70">{isExpanded ? '▼' : '▲'}</span>
                 </div>
 
-                <div className="mb-4">
-                  <div
-                    className="text-4xl font-bold mb-2 tracking-tight"
-                    style={{color: config.color}}
-                  >
-                    {sensor.value.toFixed(1)}
-                    <span className={`text-lg ml-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {config.unit}
-                    </span>
-                  </div>
-                  <div
-                    className={`text-sm font-medium ${
-                      sensor.warning ? 'text-red-500' : 'text-green-500'
-                    }`}
-                  >
-                    {sensor.warning ? 'Warnung' : 'Normal'}
-                  </div>
-                </div>
+                {isExpanded ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      {Object.entries(vehicle.metrics).map(([metricKey, value]) => {
+                        const cfg = vehicleConfigs[metricKey];
+                        const percentage = Math.min((value / cfg.max) * 100, 100);
+                        return (
+                          <div key={metricKey} className="flex flex-col items-center">
+                            <span className="text-xl mb-1">{cfg.icon}</span>
+                            <div className="relative w-20 h-20 mb-1">
+                              <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(${cfg.color} ${percentage}%, ${darkMode? '#2d3748':'#e5e7eb'} ${percentage}%)`}} />
+                              <div className={`absolute inset-1 rounded-full flex flex-col items-center justify-center ${darkMode? 'bg-gray-900':'bg-white'}`}>
+                                <span className="text-sm font-bold" style={{color:cfg.color}}>{value.toFixed(1)}</span>
+                                <span className="text-[10px]" style={{color: darkMode? '#9ca3af':'#6b7280'}}>{cfg.unit}</span>
+                              </div>
+                            </div>
+                            <span className={`text-xs font-medium ${vehicle.warnings[metricKey] ? 'text-red-500':'text-green-500'}`}>{vehicle.warnings[metricKey]? 'Warnung':'OK'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 text-xs space-y-1">
+                       <p><strong>Kilometerstand:</strong> {vehicle.mileage.toLocaleString()} km</p>
+                       <p><strong>Letzte Wartung:</strong> {vehicle.lastServiceDate}</p>
+                       <p><strong>Nächste Wartung:</strong> {vehicle.nextServiceDate}</p>
+                     </div>
 
-                <button
-                  onClick={() => toggleSensor(sensorName)}
-                  className={`w-full py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.02] ${
-                    sensor.isRunning
-                      ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white'
-                      : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                  } shadow-md`}
-                >
-                  {sensor.isRunning ? (
-                    <>
-                      <Pause size={18} className="inline mr-2" />
-                      Stoppen
-                    </>
-                  ) : (
-                    <>
-                      <Play size={18} className="inline mr-2" />
-                      Starten
-                    </>
-                  )}
-                </button>
+                    {vehiclePreds.length>0 && (
+                       <div className="mt-3 space-y-1">
+                         <h4 className="text-xs font-semibold">Offene Prognosen</h4>
+                         {vehiclePreds.map((p,i)=>(
+                           <div key={i} className="text-xs flex justify-between">
+                             <span>{p.component}</span>
+                             <span className="font-semibold">{p.daysUntil} Tage</span>
+                           </div>
+                         ))}
+                       </div>
+                    )}
 
-                {sensor.history.length > 0 && (
-                  <div className="mt-4 h-24">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={formatChartData(sensorName)}>
-                        <defs>
-                          <linearGradient id={`gradient-${sensorName}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={config.color} stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor={config.color} stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke={config.color}
-                          strokeWidth={2}
-                          dot={false}
-                          animationDuration={2000}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: darkMode ? '#1f2937' : 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {vehicle.history.engineTemp.length > 0 && (
+                      <div className="mt-2 h-20 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={formatChartData(vehicle.id,'engineTemp')}>
+                            <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={false} animationDuration={1500}/>
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex justify-between mt-2">
+                    {Object.entries(vehicle.metrics).map(([metricKey,value])=>{
+                      const cfg = vehicleConfigs[metricKey];
+                      const percentage=Math.min((value/cfg.max)*100,100);
+                      return (
+                        <div key={metricKey} className="flex flex-col items-center">
+                          <div className="relative w-12 h-12 mb-0.5">
+                            <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(${cfg.color} ${percentage}%, ${darkMode? '#2d3748':'#e5e7eb'} ${percentage}%)`}} />
+                            <div className={`absolute inset-1 rounded-full flex items-center justify-center ${darkMode? 'bg-gray-900':'bg-white'}`}
+                            >
+                              <span className="text-[8px] font-bold" style={{color:cfg.color}}>{value.toFixed(0)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -387,16 +649,30 @@ const App = () => {
           })}
         </div>
 
+        {/* Pagination */}
+        {vehicles.length>vehiclesPerPage && (
+          <div className="flex justify-center items-center gap-4 mt-6">
+            <button disabled={currentPage===0} onClick={()=>setCurrentPage(p=>Math.max(0,p-1))} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow disabled:opacity-30">
+              <ChevronLeft size={16}/>
+            </button>
+            <span className="text-sm">Seite {currentPage+1} / {Math.ceil(vehicles.length/vehiclesPerPage)}</span>
+            <button disabled={currentPage>=Math.ceil(vehicles.length/vehiclesPerPage)-1} onClick={()=>setCurrentPage(p=>Math.min(Math.ceil(vehicles.length/vehiclesPerPage)-1,p+1))} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow disabled:opacity-30">
+              <ChevronRight size={16}/>
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Predictions */}
           <div className={`rounded-xl shadow-lg p-6 transition-colors duration-300 ${
             darkMode ? 'bg-gray-800 text-white' : 'bg-white'
           }`}>
-            <h2 className="text-xl font-semibold mb-6 flex items-center">
+            <h2 className="text-xl font-semibold mb-4 flex items-center dark:text-white">
               <Activity className="mr-2" />
               Ausfallvorhersagen
             </h2>
-            {predictions.length === 0 ? (
+            <div className="text-xs opacity-70 mb-4">Vorhersagen je Fahrzeug (ML-basiert)</div>
+            {fleetPredictions.length === 0 ? (
               <div className="text-center py-12">
                 <CheckCircle
                   size={64}
@@ -407,11 +683,11 @@ const App = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {predictions.map((prediction, index) => (
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {fleetPredictions.map((prediction, index) => (
                   <div
                     key={index}
-                    className={`border-l-4 pl-4 py-4 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] ${
+                    className={`border-l-4 pl-4 py-4 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] dark:text-gray-100 ${
                       prediction.priority === "Hoch"
                         ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                         : prediction.priority === "Mittel"
@@ -421,7 +697,10 @@ const App = () => {
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-semibold">{prediction.component}</h3>
+                        <h3 className="font-semibold dark:text-white flex items-center gap-2">
+                          {React.createElement(vehicles.find(v=>v.id===prediction.vehicleId)?.icon || Truck,{size:14})}
+                          {vehicles.find(v=>v.id===prediction.vehicleId)?.name}: {prediction.component}
+                        </h3>
                         <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                           {prediction.reason}
                         </p>
@@ -430,7 +709,7 @@ const App = () => {
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold">
+                        <div className="text-lg font-bold dark:text-white">
                           {prediction.daysUntil} Tag{prediction.daysUntil !== 1 ? "e" : ""}
                         </div>
                         <div
@@ -498,23 +777,23 @@ const App = () => {
                 data={[
                   {
                     name: "Temperatur",
-                    value: sensors.temperature.value,
+                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.engineTemp, 0) / vehicles.length : 0,
                     fill: "#ef4444",
                   },
                   {
                     name: "Ölstand",
-                    value: sensors.oilLevel.value,
+                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.oilLevel, 0) / vehicles.length : 0,
                     fill: "#f59e0b",
                   },
                   {
-                    name: "Vibration",
-                    value: sensors.vibration.value * 10,
-                    fill: "#8b5cf6",
+                    name: "Reifendruck",
+                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.tyrePressure, 0) / vehicles.length : 0,
+                    fill: "#06b6d4",
                   },
                   {
-                    name: "Druck",
-                    value: sensors.pressure.value,
-                    fill: "#06b6d4",
+                    name: "Batteriekapazität",
+                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.batteryHealth, 0) / vehicles.length : 0,
+                    fill: "#8b5cf6",
                   },
                 ]}
               >
@@ -545,6 +824,55 @@ const App = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        {/* Timeline Graph Section */}
+        <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${
+          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
+        }`}>
+          <h2 className="text-xl font-semibold mb-6">Ereignis-Timeline</h2>
+          {timeline.length === 0 ? (
+            <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+              Keine Ereignisse
+            </p>
+          ) : (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{top: 20, right: 30, bottom: 20, left: 0}}>
+                  <CartesianGrid stroke={darkMode ? '#374151' : '#e5e7eb'} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="time"
+                    type="number"
+                    domain={[warningData.concat(predictionData).length > 0 ? 'dataMin' : 0, 'dataMax']}
+                    tickFormatter={(t) => new Date(t).toLocaleTimeString()}
+                    tick={{ fill: darkMode ? '#9ca3af' : '#4b5563', fontSize: 12 }}
+                  />
+                  <YAxis
+                    dataKey="y"
+                    type="number"
+                    domain={[-0.5, 2.5]}
+                    ticks={[0, 1, 2]}
+                    tickFormatter={(v) => (v === 0 ? 'Wartung' : v === 1 ? 'Warnung' : 'Prognose')}
+                    tick={{ fill: darkMode ? '#9ca3af' : '#4b5563', fontSize: 12 }}
+                  />
+                  <Tooltip
+                    labelFormatter={(value) => new Date(value).toLocaleString()}
+                    cursor={{ strokeDasharray: '3 3' }}
+                    contentStyle={{
+                      backgroundColor: darkMode ? '#1f2937' : 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(value, name, props) => [props.payload.desc, name]}
+                  />
+                  <Scatter name="Warnungen" data={warningData} fill="#ef4444" shape="triangle" />
+                  <Scatter name="Prognosen" data={predictionData} fill="#6366f1" shape="circle" />
+                  <Scatter name="Historie" data={historyData} fill="#9ca3af" shape="square" />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
     </div>
