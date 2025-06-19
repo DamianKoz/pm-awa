@@ -477,15 +477,18 @@ const App = () => {
                     </button>
                     {unreadCount>0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] rounded-full px-1">{unreadCount}</span>}
                     {showInbox && (
-                      <div className={`absolute right-0 mt-2 w-72 max-h-96 overflow-y-auto rounded-lg shadow-xl p-4 z-50 ${darkMode? 'bg-gray-800 text-white':'bg-white'}`} style={{overflow:'visible'}}>
+                      <div
+                        className={`absolute right-0 mt-2 w-72 overflow-auto resize rounded-lg shadow-xl p-4 z-50 ${darkMode? 'bg-gray-800 text-white':'bg-white text-gray-900'}`}
+                        style={{ minWidth: '12rem', minHeight: '4rem' }}
+                      >
                         <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-semibold text-sm">Benachrichtigungen</h3>
-                          <button onClick={()=>setNotifications([])} className="text-xs hover:underline">Alle löschen</button>
+                          <h3 className="font-semibold text-sm dark:text-white text-gray-800">Benachrichtigungen</h3>
+                          <button onClick={()=>setNotifications([])} className="text-xs hover:underline dark:text-gray-300 dark:hover:text-white text-blue-600 hover:text-blue-700">Alle löschen</button>
                         </div>
                         {notifications.length===0 ? <p className="text-xs text-gray-500">Keine Benachrichtigungen</p> : (
                           <ul className="space-y-2">
                             {notifications.slice().reverse().map(notif=> (
-                              <li key={notif.id} className={`p-2 rounded-md flex items-start justify-between ${notif.unread? (darkMode?'bg-gray-700':'bg-indigo-50'):''}`}>
+                              <li key={notif.id} className={`p-2 rounded-md flex items-start justify-between ${notif.unread? (darkMode?'bg-gray-700':'bg-indigo-100'):''}`}>
                                 <div className="flex items-start gap-2">
                                   {notif.type==='warning'? <AlertTriangle size={14} className="text-red-500"/> : <Zap size={14} className="text-indigo-500"/>}
                                   <span className="text-xs leading-snug">{notif.message}</span>
@@ -689,10 +692,10 @@ const App = () => {
                     key={index}
                     className={`border-l-4 pl-4 py-4 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] dark:text-gray-100 ${
                       prediction.priority === "Hoch"
-                        ? "border-red-500 bg-red-50 dark:bg-red-900/20"
+                        ? "border-red-500 bg-red-50 dark:border-red-400 dark:bg-red-900/60"
                         : prediction.priority === "Mittel"
-                        ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
-                        : "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                        ? "border-yellow-500 bg-yellow-50 dark:border-yellow-400 dark:bg-yellow-900/60"
+                        : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/60"
                     }`}
                   >
                     <div className="flex justify-between items-start">
