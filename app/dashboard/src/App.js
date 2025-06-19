@@ -44,22 +44,100 @@ const App = () => {
   const [maintenanceHistory] = useState([
     {
       date: "2024-05-20",
-      component: "Pumpe A",
+      component: "Kühlsystem",
       type: "Planmäßig",
       status: "Abgeschlossen",
+      vehicle: "Fahrzeug 8",
+      technician: "Michael Weber",
+      cost: 450,
+      description: "Kühlflüssigkeit gewechselt, Thermostat überprüft",
+      planned: true,
+      duration: "2.5h"
+    },
+    {
+      date: "2024-05-18",
+      component: "Ölwechsel",
+      type: "Ungeplant",
+      status: "Abgeschlossen",
+      vehicle: "Fahrzeug 15",
+      technician: "Sarah Müller",
+      cost: 280,
+      description: "Ölstand kritisch, sofortiger Wechsel erforderlich",
+      planned: false,
+      duration: "1.5h"
     },
     {
       date: "2024-05-15",
-      component: "Motor B",
-      type: "Reparatur",
+      component: "Reifendruck",
+      type: "Planmäßig",
       status: "Abgeschlossen",
+      vehicle: "Fahrzeug 3",
+      technician: "Thomas Schmidt",
+      cost: 120,
+      description: "Alle Reifen auf Soll-Druck gebracht, Ventile überprüft",
+      planned: true,
+      duration: "1h"
+    },
+    {
+      date: "2024-05-12",
+      component: "Batteriewechsel",
+      type: "Ungeplant",
+      status: "Abgeschlossen",
+      vehicle: "Fahrzeug 22",
+      technician: "Andreas Fischer",
+      cost: 380,
+      description: "Batterie defekt, neue AGM-Batterie eingebaut",
+      planned: false,
+      duration: "2h"
     },
     {
       date: "2024-05-10",
-      component: "Filter C",
-      type: "Austausch",
+      component: "Bremsen",
+      type: "Planmäßig",
       status: "Abgeschlossen",
+      vehicle: "Fahrzeug 7",
+      technician: "Lisa Wagner",
+      cost: 520,
+      description: "Bremsbeläge gewechselt, Bremsscheiben überprüft",
+      planned: true,
+      duration: "3h"
     },
+    {
+      date: "2024-05-08",
+      component: "Luftfilter",
+      type: "Planmäßig",
+      status: "Abgeschlossen",
+      vehicle: "Fahrzeug 12",
+      technician: "Michael Weber",
+      cost: 85,
+      description: "Motorluftfilter und Kabinenfilter gewechselt",
+      planned: true,
+      duration: "0.8h"
+    },
+    {
+      date: "2024-05-05",
+      component: "Getriebeöl",
+      type: "Ungeplant",
+      status: "Abgeschlossen",
+      vehicle: "Fahrzeug 19",
+      technician: "Sarah Müller",
+      cost: 320,
+      description: "Getriebeöl undicht, Dichtung erneuert",
+      planned: false,
+      duration: "2.2h"
+    },
+    {
+      date: "2024-05-02",
+      component: "Scheinwerfer",
+      type: "Planmäßig",
+      status: "Abgeschlossen",
+      vehicle: "Fahrzeug 4",
+      technician: "Thomas Schmidt",
+      cost: 95,
+      description: "Scheinwerfer ausgerichtet, Glühbirnen gewechselt",
+      planned: true,
+      duration: "1.2h"
+    }
   ]);
 
   // Timeline of issues/warnings
@@ -145,9 +223,11 @@ const App = () => {
       // Oil change prediction
       if (metrics.oilLevel < 50) {
         const daysUntilCritical = Math.max(1, Math.floor(metrics.oilLevel / 2));
+        const recommendedMaintenanceDays = Math.max(1, daysUntilCritical - 7); // 1 week before critical
         predictions.push({
           component: "Ölwechsel",
           daysUntil: daysUntilCritical,
+          recommendedMaintenanceDays,
           confidence: 95,
           priority: metrics.oilLevel < 20 ? "Hoch" : "Mittel",
           reason: `Ölstand bei ${metrics.oilLevel.toFixed(1)}%`,
@@ -158,9 +238,11 @@ const App = () => {
       // Temperature-based maintenance
       if (metrics.engineTemp > 85) {
         const daysUntil = Math.max(1, Math.floor((100 - metrics.engineTemp) * 2));
+        const recommendedMaintenanceDays = Math.max(1, daysUntil - 5); // 5 days before critical
         predictions.push({
           component: "Kühlsystem",
           daysUntil,
+          recommendedMaintenanceDays,
           confidence: 87,
           priority: metrics.engineTemp > 95 ? "Hoch" : "Mittel",
           reason: `Temperatur bei ${metrics.engineTemp.toFixed(1)}°C`,
@@ -171,9 +253,11 @@ const App = () => {
       // Pressure-based maintenance
       if (metrics.tyrePressure < 100) {
         const daysUntil = Math.max(1, Math.floor(metrics.tyrePressure / 5));
+        const recommendedMaintenanceDays = Math.max(1, daysUntil - 3); // 3 days before critical
         predictions.push({
           component: "Reifendruck",
           daysUntil,
+          recommendedMaintenanceDays,
           confidence: 78,
           priority: metrics.tyrePressure < 80 ? "Hoch" : "Niedrig",
           reason: `Reifendruck bei ${metrics.tyrePressure.toFixed(1)} bar`,
@@ -184,9 +268,11 @@ const App = () => {
       // Battery health prediction
       if (metrics.batteryHealth < 20) {
         const daysUntil = Math.max(1, Math.floor(20 / metrics.batteryHealth));
+        const recommendedMaintenanceDays = Math.max(1, daysUntil - 10); // 10 days before critical
         predictions.push({
           component: "Batteriewechsel",
           daysUntil,
+          recommendedMaintenanceDays,
           confidence: 85,
           priority: "Hoch",
           reason: `Batteriekapazität bei ${metrics.batteryHealth.toFixed(1)}%`,
@@ -610,9 +696,18 @@ const App = () => {
                        <div className="mt-3 space-y-1">
                          <h4 className="text-xs font-semibold">Offene Prognosen</h4>
                          {vehiclePreds.map((p,i)=>(
-                           <div key={i} className="text-xs flex justify-between">
-                             <span>{p.component}</span>
-                             <span className="font-semibold">{p.daysUntil} Tage</span>
+                           <div key={i} className="text-xs space-y-1">
+                             <div className="flex justify-between items-center">
+                               <span>{p.component}</span>
+                               <div className="flex gap-1">
+                                 <span className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1 py-0.5 rounded text-[8px]">
+                                   {p.recommendedMaintenanceDays}d
+                                 </span>
+                                 <span className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-1 py-0.5 rounded text-[8px]">
+                                   {p.daysUntil}d
+                                 </span>
+                               </div>
+                             </div>
                            </div>
                          ))}
                        </div>
@@ -654,7 +749,7 @@ const App = () => {
 
         {/* Pagination */}
         {vehicles.length>vehiclesPerPage && (
-          <div className="flex justify-center items-center gap-4 mt-6">
+          <div className="flex justify-center items-center gap-4 mt-6 mb-8">
             <button disabled={currentPage===0} onClick={()=>setCurrentPage(p=>Math.max(0,p-1))} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow disabled:opacity-30">
               <ChevronLeft size={16}/>
             </button>
@@ -686,45 +781,65 @@ const App = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-4 scrollbar-[2px] scrollbar-thumb-white/20 scrollbar-track-transparent">
                 {fleetPredictions.map((prediction, index) => (
                   <div
                     key={index}
-                    className={`border-l-4 pl-4 py-4 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] dark:text-gray-100 ${
+                    className={`border-l-4 pl-3 py-3 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] ${
                       prediction.priority === "Hoch"
-                        ? "border-red-500 bg-red-50 dark:border-red-400 dark:bg-red-900/60"
+                        ? "border-red-500 bg-red-50/90 dark:border-red-400 dark:bg-red-500/10"
                         : prediction.priority === "Mittel"
-                        ? "border-yellow-500 bg-yellow-50 dark:border-yellow-400 dark:bg-yellow-900/60"
-                        : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/60"
+                        ? "border-yellow-500 bg-yellow-50/90 dark:border-yellow-400 dark:bg-yellow-500/10"
+                        : "border-blue-500 bg-blue-50/90 dark:border-blue-400 dark:bg-blue-500/10"
                     }`}
                   >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-semibold dark:text-white flex items-center gap-2">
-                          {React.createElement(vehicles.find(v=>v.id===prediction.vehicleId)?.icon || Truck,{size:14})}
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
+                        <h3 className="font-semibold dark:text-gray-100 flex items-center gap-2 text-base">
+                          {React.createElement(vehicles.find(v=>v.id===prediction.vehicleId)?.icon || Truck,{size:14, className: "dark:text-gray-300"})}
                           {vehicles.find(v=>v.id===prediction.vehicleId)?.name}: {prediction.component}
                         </h3>
-                        <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
                           {prediction.reason}
                         </p>
-                        <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Konfidenz: {prediction.confidence}%
-                        </p>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold dark:text-white">
-                          {prediction.daysUntil} Tag{prediction.daysUntil !== 1 ? "e" : ""}
+                      <div className="text-right ml-3">
+                        <div className="flex gap-2 items-center">
+                          {/* Recommended Maintenance Date */}
+                          <div className="bg-green-100 dark:bg-green-500/10 rounded px-2 py-1">
+                            <div className="text-[10px] text-green-700 dark:text-green-400 font-medium">
+                              Empfohlen
+                            </div>
+                            <div className="text-xs font-bold text-green-800 dark:text-green-300">
+                              {prediction.recommendedMaintenanceDays}d
+                            </div>
+                          </div>
+                          
+                          {/* Predicted Failure Date */}
+                          <div className="bg-red-100 dark:bg-red-500/10 rounded px-2 py-1">
+                            <div className="text-[10px] text-red-700 dark:text-red-400 font-medium">
+                              Ausfall
+                            </div>
+                            <div className="text-xs font-bold text-red-800 dark:text-red-300">
+                              {prediction.daysUntil}d
+                            </div>
+                          </div>
                         </div>
-                        <div
-                          className={`text-xs px-2 py-1 rounded-full mt-1 ${
-                            prediction.priority === "Hoch"
-                              ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
-                              : prediction.priority === "Mittel"
-                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300"
-                              : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
-                          }`}
-                        >
-                          {prediction.priority}
+                        <div className="flex items-center justify-between mt-1">
+                          <div
+                            className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              prediction.priority === "Hoch"
+                                ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+                                : prediction.priority === "Mittel"
+                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300"
+                                : "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300"
+                            }`}
+                          >
+                            {prediction.priority}
+                          </div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                            {prediction.confidence}%
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -739,28 +854,50 @@ const App = () => {
             darkMode ? 'bg-gray-800 text-white' : 'bg-white'
           }`}>
             <h2 className="text-xl font-semibold mb-6">Wartungshistorie</h2>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-96 overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600/50 dark:scrollbar-thumb-gray-500/30 scrollbar-track-transparent hover:scrollbar-thumb-gray-600/70 dark:hover:scrollbar-thumb-gray-400/50">
               {maintenanceHistory.map((entry, index) => (
                 <div 
                   key={index} 
-                  className={`border-b last:border-b-0 pb-4 transition-all duration-300 transform hover:scale-[1.02] ${
-                    darkMode ? 'border-gray-700' : 'border-gray-200'
+                  className={`border-l-4 pl-4 pr-3 pb-4 transition-all duration-300 transform hover:scale-[1.02] ${
+                    entry.planned 
+                      ? 'border-green-500 bg-green-50/90 dark:border-green-400 dark:bg-green-500/10' 
+                      : 'border-red-500 bg-red-50/90 dark:border-red-400 dark:bg-red-500/10'
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium">{entry.component}</h3>
-                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {entry.type}
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-sm dark:text-gray-100">{entry.component}</h3>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          entry.planned 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300' 
+                            : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300'
+                        }`}>
+                          {entry.planned ? 'Geplant' : 'Ungeplant'}
+                        </span>
+                      </div>
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
+                        {entry.vehicle} • {entry.technician}
+                      </p>
+                      <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                        {entry.description}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {entry.date}
+                    <div className="text-right ml-3">
+                      <div className={`text-sm font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                        {entry.cost}€
                       </div>
-                      <div className="text-xs text-green-500 font-medium mt-1">
-                        {entry.status}
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {entry.duration}
                       </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                      {entry.date}
+                    </div>
+                    <div className="text-xs text-green-500 dark:text-green-400 font-medium">
+                      {entry.status}
                     </div>
                   </div>
                 </div>
