@@ -20,6 +20,7 @@ service MaintainanceService {
     entity Maintenances as projection on my.Maintenances;
     entity Locations as projection on my.Locations;
     entity Routes as projection on my.Routes;
+    entity TelemetrySensors as projection on my.TelemetrySensors;
 
     action RegisterVehicle 
     (

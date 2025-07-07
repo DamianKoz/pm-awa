@@ -23,12 +23,36 @@ Authorization: Basic {{username}} {{password}}
 {
 }
 
+### Measure Telemetry for Vehicle
+# @name Measure_Telemetry
+POST {{server}}/service/MaintainanceService/Vehicles({{Register_Vehicle.response.body.ID}})/MeasureAllTelemetry
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
 
-### Vehicles
+{
+}
+
+### Vehicles 
 # @name Vehicles_GET
+GET {{server}}/service/MaintainanceService/Vehicles
+Authorization: Basic {{username}} {{password}}
+
+
+### Vehicles with routes
+# @name Vehicles_GET_with_routes
 GET {{server}}/service/MaintainanceService/Vehicles?$expand=routes($expand=geometry)
 Authorization: Basic {{username}} {{password}}
 
+### Vehicles with metrics
+# @name Vehicles_GET_with_metrics
+GET {{server}}/service/MaintainanceService/Vehicles?$expand=metrics
+Authorization: Basic {{username}} {{password}}
+
+
+### TelemetrySensors 
+# @name TelemetrySensors_GET
+GET {{server}}/service/MaintainanceService/TelemetrySensors
+Authorization: Basic {{username}} {{password}}
 
 
 ### Vehicles

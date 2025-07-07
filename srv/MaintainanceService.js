@@ -5,6 +5,7 @@
 const LCAPApplicationService = require('@sap/low-code-event-handler');
 const on_registervehicle_Logic = require('./code/on-registervehicle-logic');
 const vehicles_on_createroute_Logic = require('./code/vehicles-on-createroute-logic');
+const vehicles_on_measurealltelemetry_Logic = require('./code/vehicles-on-measurealltelemetry-logic');
 
 class MaintainanceService extends LCAPApplicationService {
     async init() {
@@ -16,6 +17,10 @@ class MaintainanceService extends LCAPApplicationService {
 
         this.on('CreateRoute', 'Vehicles', async (request) => {
             return await vehicles_on_createroute_Logic(request);
+        });
+
+        this.on('MeasureAllTelemetry', async (request) => {
+            return await vehicles_on_measurealltelemetry_Logic(request);
         });
 
 

@@ -10,6 +10,11 @@ module.exports = async function (req) {
 
 	const ID = req.params.at(-1).ID
 	const vehicle = await SELECT.one(Vehicles, ID)
+
+	if (!vehicle) {
+		throw new Error(`Vehicle with ID ${ID} not found.`)
+	}
+
 	const { destinationLocation_ID } = req.data
 
 	if (!destinationLocation_ID) {

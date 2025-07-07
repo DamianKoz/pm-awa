@@ -55,9 +55,16 @@ entity RouteGeometry {
 
 entity Telemetry : cuid, managed {
   vehicle       : Association to Vehicles;
-  sensor        : String(30);       // "engineTemp", …
+  sensor        : Association to TelemetrySensors;
   value         : Decimal(9,3);
-  unit          : String(10);
+}
+
+entity TelemetrySensors : cuid {
+  name : String(30);
+  unit : String(10);
+  min : Decimal(9,3);
+  max : Decimal(9,3);
+  description : String(255);
 }
 
 entity Warnings : cuid, managed {

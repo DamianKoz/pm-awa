@@ -820,7 +820,7 @@ const App = () => {
                   id="simSpeed"
                   type="range"
                   min="0.25"
-                  max="10"
+                  max="100"
                   step="0.25"
                   list="speedTicks"
                   value={simulationSpeed}
