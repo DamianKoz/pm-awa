@@ -22,14 +22,15 @@ entity Vehicles : cuid, managed {
   destinationLongitude  : Decimal(9,6);
   originLatitude        : Decimal(9,6);
   originLongitude       : Decimal(9,6);
+  activeRouteIndex : Integer;
 
   /* Associations */
   metrics      : Composition of many Telemetry   on metrics.vehicle = $self;
   predictions  : Composition of many Predictions on predictions.vehicle = $self;
-  maintHistory : Composition of many Maintenances on maintHistory.vehicle = $self;
+  activePrediction : Association to one Predictions;
+  maintenanceHistory : Composition of many Maintenances on maintenanceHistory.vehicle = $self;
   routes       : Composition of many Routes on routes.vehicle = $self;
   activeRoute  : Association to one Routes;
-  activeRouteIndex : Integer;
 }
 
 entity VehicleModels : cuid {
@@ -69,6 +70,10 @@ entity TelemetrySensors : cuid {
   max : Decimal(9,3);
   reference : Decimal(9,3);
   description : String;
+  warnLow : Decimal(9,3);
+  warnHigh : Decimal(9,3);
+  criticalLow : Decimal(9,3);
+  criticalHigh : Decimal(9,3);
   affectedComponents : Composition of many TelemetrySensorAffectedComponents on affectedComponents.sensor = $self;
 }
 
@@ -94,11 +99,13 @@ entity Warnings : cuid, managed {
 entity Predictions : cuid, managed {
   vehicle       : Association to Vehicles;
   component     : Association to VehicleComponents;
-  recommendedAt : DateTime;
-  latestAt      : DateTime;
-  confidence    : Decimal(9,3);
+  recommendedMaintenanceAt : DateTime;
+  latestMaintenanceAt      : DateTime;
+  recommendedMaintainanceConfidence    : Decimal(9,3);
+  latestMaintainanceConfidence      : Decimal(9,3);
   priority      : String enum { High; Medium; Low; };
   reason        : String;
+  description   : String;
 }
 
 entity Maintenances : cuid, managed {

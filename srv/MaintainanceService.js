@@ -8,6 +8,7 @@ const vehicles_on_createroute_Logic = require('./code/vehicles-on-createroute-lo
 const vehicles_on_measurealltelemetry_Logic = require('./code/vehicles-on-measurealltelemetry-logic');
 const on_simulationStep_Logic = require('./code/on-simulationStep-logic');
 const on_setsimulationstepinterval_Logic = require('./code/on-setsimulationstepinterval-logic');
+const vehicles_on_createprediction_Logic = require('./code/vehicles-on-createprediction-logic');
 
 class MaintainanceService extends LCAPApplicationService {
     async init() {
@@ -31,6 +32,11 @@ class MaintainanceService extends LCAPApplicationService {
 
         this.on('SetSimulationStepInterval', async (request) => {
             return await on_setsimulationstepinterval_Logic(request);
+        });
+
+
+        this.on('CreatePrediction', 'Vehicles', async (request) => {
+            return await vehicles_on_createprediction_Logic(request);
         });
 
         return super.init();

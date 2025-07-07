@@ -9,7 +9,7 @@ Content-Type: application/json
 Authorization: Basic {{username}} {{password}}
 
 {
-  "interval": 1
+  "interval": 1000
 }
 
 
@@ -44,7 +44,7 @@ Authorization: Basic {{username}} {{password}}
 
 ### Vehicles 
 # @name Vehicles_GET
-GET {{server}}/service/MaintainanceService/Vehicles
+GET {{server}}/service/MaintainanceService/Vehicles?$expand=*
 Authorization: Basic {{username}} {{password}}
 
 

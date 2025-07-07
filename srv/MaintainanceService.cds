@@ -18,6 +18,10 @@ service MaintainanceService {
         action MeasureAllTelemetry
         (
         ) returns many Telemetry;
+
+        action CreatePrediction
+        (
+        ) returns Predictions;
     };
     entity Telemetry as projection on my.Telemetry;
     entity Warnings as projection on my.Warnings;

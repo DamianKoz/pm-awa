@@ -18,7 +18,7 @@ module.exports = async function(MaintainanceService) {
         for (let i = 0; i < mockedVehiclesCount; i++) {
             const vehicle = await MaintainanceService.RegisterVehicle({})
             const route = await MaintainanceService.CreateRoute('Vehicles', vehicle.ID)
-            console.log(`Created route ${route.ID} for vehicle ${vehicle.ID}`)
+            // console.log(`Created route ${route.ID} for vehicle ${vehicle.ID}`)
         }
     }
 
