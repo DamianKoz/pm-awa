@@ -42,6 +42,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(false);
+  const [simulationSpeed, setSimulationSpeed] = useState(1); // Simulation speed multiplier (1x default)
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [vehicles, setVehicles] = useState([]);
   const [fleetPredictions, setFleetPredictions] = useState([]);
@@ -331,10 +332,10 @@ const App = () => {
           updateVehicleMetric(vehicle.id, metricKey);
         });
       });
-    }, 6000);
+    }, 6000 / simulationSpeed);
 
     return () => clearInterval(interval);
-  }, [vehicles, updateVehicleMetric]);
+  }, [vehicles, updateVehicleMetric, simulationSpeed]);
 
   // Recalculate predictions when sensors change
   useEffect(() => {
@@ -656,9 +657,9 @@ const App = () => {
           location: v.route[nextIndex],
         };
       }));
-    }, 4000); // every 4 s
+    }, 4000 / simulationSpeed); // scaled by simulation speed
     return () => clearInterval(iv);
-  }, []);
+  }, [simulationSpeed]);
 
   // fetch real street routes from OSRM for moving vehicles that still have synthetic routes
   useEffect(() => {
@@ -720,6 +721,21 @@ const App = () => {
                   >
                     {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
                   </button>
+                  {/* Simulation speed slider (header) */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      id="simSpeedHeader"
+                      type="range"
+                      min="0.25"
+                      max="4"
+                      step="0.25"
+                      value={simulationSpeed}
+                      onChange={(e) => setSimulationSpeed(Number(e.target.value))}
+                      className="accent-yellow-300 cursor-pointer h-2"
+                      style={{width: headerCollapsed ? '4rem' : '6rem'}}
+                    />
+                    <span className="text-xs w-6 text-right select-none">{simulationSpeed}x</span>
+                  </div>
                   {/* Bell */}
                   <div className="relative">
                     <button onClick={()=>setShowInbox(s=>!s)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
@@ -776,6 +792,20 @@ const App = () => {
                   max="200"
                   value={vehicleCount}
                   onChange={(e) => setVehicleCount(Number(e.target.value))}
+                  className="accent-blue-600 cursor-pointer"
+                />
+              </div>
+              {/* Simulation speed control */}
+              <div className="flex items-center gap-3">
+                <label htmlFor="simSpeed" className="text-sm whitespace-nowrap">Tempo: <span className="font-semibold">{simulationSpeed}x</span></label>
+                <input
+                  id="simSpeed"
+                  type="range"
+                  min="0.25"
+                  max="4"
+                  step="0.25"
+                  value={simulationSpeed}
+                  onChange={(e) => setSimulationSpeed(Number(e.target.value))}
                   className="accent-blue-600 cursor-pointer"
                 />
               </div>
@@ -1190,7 +1220,7 @@ const App = () => {
               />
               {/* render routes and moving markers */}
               {vehicles.map(v => v.route ? (
-                <Polyline key={v.id + "_line"} positions={v.route.map(p => [p.lat, p.lng])} pathOptions={{ color: '#2563eb', weight: 2, dashArray: '6 4', opacity: 0.4 }} />
+                <Polyline key={v.id + "_line"} positions={v.route.map(p => [p.lat, p.lng])} pathOptions={{ color: '#3b82f6', weight: 2.5, dashArray: '6 4', opacity: 0.8 }} />
               ) : null)}
               {vehicles.map(v => (
                 <Marker key={v.id} position={[v.location.lat, v.location.lng]} icon={v.markerIcon}>
