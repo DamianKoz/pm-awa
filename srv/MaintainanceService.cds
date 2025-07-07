@@ -2,6 +2,8 @@ using { componentX as my} from '../db/schema.cds';
 
 @path: '/service/MaintainanceService'
 @requires : 'any' // no auth
+@Common.WebSocketBaseURL : 'ws/WebSocketService'
+@Common.WebSocketChannel #sideEffects : 'VehicleChanged'
 service MaintainanceService {
 
     entity Vehicles as projection on my.Vehicles {
@@ -24,6 +26,10 @@ service MaintainanceService {
     entity Locations as projection on my.Locations;
     entity Routes as projection on my.Routes;
     entity TelemetrySensors as projection on my.TelemetrySensors;
+    entity VehicleComponents as projection on my.VehicleComponents;
+    entity TelemetrySensorAffectedComponents as projection on my.TelemetrySensorAffectedComponents;
+    entity VehicleModels as projection on my.VehicleModels;
+
 
     action RegisterVehicle 
     (

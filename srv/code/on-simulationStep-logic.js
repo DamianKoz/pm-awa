@@ -13,7 +13,10 @@ module.exports = async function (req) {
 			expand('geometry', columns('*'))
 		)))
 	const MaintainanceService = await cds.connect.to('MaintainanceService')
-
+	const eventName = 'VehicleChanged'
+    const webSocketLOG = cds.log('webSocket')
+    const WebSocketService = await cds.connect.to('WebSocketService');
+    
 	for (const vehicle of vehicles) {
 		// move vehicle to the next coordinate on the route if it has an active route
 		if(vehicle.activeRoute) {
@@ -21,6 +24,14 @@ module.exports = async function (req) {
 			await UPDATE(Vehicles, vehicle.ID).with({ activeRouteIndex: vehicle.activeRouteIndex + 1, latitude: nextCoordinate.latitude, longitude: nextCoordinate.longitude })
 		}
 		await MaintainanceService.MeasureAllTelemetry('Vehicles', vehicle.ID)
+		webSocketLOG.info(`Emitting ${eventName} event for Vehicle: ${vehicle.ID}`)
+		WebSocketService.emit(eventName, { 
+			ID: vehicle.ID,
+			serverAction: 'RaiseSideEffect',
+			sideEffectEventName : eventName,
+			sideEffectSource : `/Vehicles(${vehicle.ID})`
+		});
+	
 	}
 
 	LOGGER.info(`Simulation step completed for ${vehicles.length} vehicles`)

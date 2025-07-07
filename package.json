@@ -26,7 +26,8 @@
     "start": "cds-serve",
     "start-local": "npm run generate-entry-point && cds watch",
     "start:dev": "concurrently \"cds-watch\" \"npm --prefix app/dashboard run start\"",
-    "generate-entry-point": "dev-cap-tools gen-entrypoint"
+    "generate-entry-point": "dev-cap-tools gen-entrypoint",
+    "watch-telemetrymonitor": "cds watch --open telemetrymonitor/webapp/index.html?sap-ui-xx-viewCache=false"
   },
   "cds": {
     "requires": {
@@ -43,5 +44,8 @@
         }
       }
     }
-  }
+  },
+  "sapux": [
+    "app/telemetrymonitor"
+  ]
 }
