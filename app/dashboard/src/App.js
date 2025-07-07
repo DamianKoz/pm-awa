@@ -31,6 +31,10 @@ import {
   Car,
   Bus,
 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 // NOTE: This file is plain JavaScript. Any previous TypeScript-style type
 // declarations have been removed for compatibility. Feel free to migrate to
@@ -149,6 +153,9 @@ const App = () => {
 
   // Track previous sensor warnings to detect new ones
   const prevVehiclesRef = useRef(vehicles);
+
+  // track which vehicle routes are currently being fetched to avoid duplicate requests
+  const routeFetchInProgress = useRef(new Set());
 
   // Sensor simulation logic
   const updateVehicleMetric = useCallback((vehicleId, metricKey) => {
@@ -453,6 +460,57 @@ const App = () => {
     .filter((e) => e.type === "history")
     .map((e) => ({time: e.time.getTime(), y: 0, desc: e.description}));
 
+  // define major inland city hubs for plausible vehicle positions
+  const cityHubs = [
+    // Germany (selection)
+    {name:'Berlin',lat:52.52,lng:13.41},{name:'Hamburg',lat:53.55,lng:10.00},{name:'München',lat:48.14,lng:11.58},{name:'Köln',lat:50.94,lng:6.96},{name:'Frankfurt',lat:50.11,lng:8.68},{name:'Stuttgart',lat:48.78,lng:9.18},{name:'Düsseldorf',lat:51.23,lng:6.77},{name:'Leipzig',lat:51.34,lng:12.37},{name:'Dresden',lat:51.05,lng:13.74},{name:'Hannover',lat:52.38,lng:9.73},{name:'Nürnberg',lat:49.45,lng:11.08},{name:'Bremen',lat:53.08,lng:8.80},
+    // Austria
+    {name:'Wien',lat:48.21,lng:16.37},{name:'Salzburg',lat:47.80,lng:13.04},{name:'Graz',lat:47.07,lng:15.44},
+    // Switzerland
+    {name:'Zürich',lat:47.38,lng:8.54},{name:'Bern',lat:46.95,lng:7.44},{name:'Genf',lat:46.20,lng:6.15},
+    // France
+    {name:'Paris',lat:48.86,lng:2.35},{name:'Lyon',lat:45.76,lng:4.84},{name:'Marseille',lat:43.30,lng:5.37},{name:'Toulouse',lat:43.60,lng:1.44},{name:'Lille',lat:50.63,lng:3.07},
+    // Belgium / Netherlands / Luxembourg
+    {name:'Brüssel',lat:50.85,lng:4.35},{name:'Antwerpen',lat:51.22,lng:4.40},{name:'Amsterdam',lat:52.37,lng:4.90},{name:'Rotterdam',lat:51.92,lng:4.48},{name:'Luxemburg',lat:49.61,lng:6.13},
+    // UK / Ireland
+    {name:'London',lat:51.50,lng:-0.12},{name:'Manchester',lat:53.48,lng:-2.24},{name:'Birmingham',lat:52.48,lng:-1.90},{name:'Glasgow',lat:55.86,lng:-4.25},{name:'Dublin',lat:53.35,lng:-6.26},
+    // Spain / Portugal
+    {name:'Madrid',lat:40.42,lng:-3.70},{name:'Barcelona',lat:41.39,lng:2.17},{name:'Valencia',lat:39.47,lng:-0.38},{name:'Sevilla',lat:37.39,lng:-5.99},{name:'Lissabon',lat:38.72,lng:-9.14},
+    // Italy
+    {name:'Rom',lat:41.90,lng:12.50},{name:'Mailand',lat:45.46,lng:9.19},{name:'Neapel',lat:40.85,lng:14.27},{name:'Turin',lat:45.07,lng:7.69},{name:'Bologna',lat:44.50,lng:11.34},
+    // Scandinavia
+    {name:'Kopenhagen',lat:55.68,lng:12.57},{name:'Stockholm',lat:59.33,lng:18.07},{name:'Oslo',lat:59.91,lng:10.75},{name:'Göteborg',lat:57.71,lng:11.97},{name:'Helsinki',lat:60.17,lng:24.94},
+    // Eastern Europe
+    {name:'Warszawa',lat:52.23,lng:21.01},{name:'Kraków',lat:50.06,lng:19.94},{name:'Praha',lat:50.08,lng:14.43},{name:'Bratislava',lat:48.15,lng:17.11},{name:'Budapest',lat:47.50,lng:19.05},{name:'Zagreb',lat:45.81,lng:15.97},{name:'Ljubljana',lat:46.06,lng:14.51},{name:'Sofia',lat:42.70,lng:23.32},{name:'Bukarest',lat:44.43,lng:26.10},
+    // Northern Italy / Adriatic ports
+    {name:'Trieste',lat:45.65,lng:13.77},{name:'Venedig',lat:45.44,lng:12.33},
+    // Baltic states
+    {name:'Riga',lat:56.95,lng:24.11},{name:'Tallinn',lat:59.44,lng:24.75},{name:'Vilnius',lat:54.69,lng:25.28},
+    // Additional hubs
+    {name:'Porto',lat:41.15,lng:-8.62},{name:'Bilbao',lat:43.26,lng:-2.93},{name:'Málaga',lat:36.72,lng:-4.42},{name:'Seinäjoki',lat:62.79,lng:23.01}
+  ];
+
+  // helper to generate a slightly curved route between two hubs (~100 pts)
+  const generateRoute = (start, end, steps=120) => {
+    const points = [];
+    const dLat = end.lat - start.lat;
+    const dLng = end.lng - start.lng;
+    // perpendicular small offset to add curvature (0.02° ≈ 2 km)
+    const perpLat = -dLng;
+    const perpLng = dLat;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps; // 0..1
+      let lat = start.lat + dLat * t;
+      let lng = start.lng + dLng * t;
+      // add sine-based curve perpendicular to path
+      const curve = Math.sin(t * Math.PI) * 0.02; // peak offset 0.02°
+      lat += perpLat * curve;
+      lng += perpLng * curve;
+      points.push({ lat, lng });
+    }
+    return points;
+  };
+
   // Generate mock vehicles
   const generateVehicles = useCallback((count) => {
     const modelPool = [
@@ -474,6 +532,39 @@ const App = () => {
       const id = `V-${idx + 1}`;
       const {name:model, icon:IconComp} = modelPool[Math.floor(Math.random()*modelPool.length)];
       const year = 2015 + Math.floor(Math.random()*8); // 2015-2022
+      // choose a random city hub and apply a small offset along a single axis to mimic being on a road close to that city
+      const hub = cityHubs[Math.floor(Math.random() * cityHubs.length)];
+      let lat = hub.lat;
+      let lng = hub.lng;
+      const offset = (Math.random() - 0.5) * 0.04; // ~ ±2-3 km
+      if (Math.random() < 0.5) {
+        lat += offset; // north-south oriented road
+      } else {
+        lng += offset; // east-west oriented road
+      }
+      const isMoving = Math.random() < 0.6; // 60% of vehicles on the road
+      let route = null;
+      let routeIndex = 0;
+      let dest = null;
+      let routeIsReal = false;
+      if (isMoving) {
+        // choose destination hub different from start
+        do {
+          dest = cityHubs[Math.floor(Math.random() * cityHubs.length)];
+        } while (dest === hub);
+        // initial synthetic fallback route (will be replaced once real route fetched)
+        route = generateRoute(hub, dest);
+        routeIndex = 0;
+        routeIsReal = false;
+      }
+      // build a custom Leaflet SVG icon using the same Lucide icon used in the list
+      const iconHtml = renderToStaticMarkup(React.createElement(IconComp, { size: 24, color: '#2563eb' }));
+      const markerIcon = L.divIcon({
+        html: iconHtml,
+        className: '',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
       const metrics = {
         engineTemp: 65 + Math.random() * 30, // 65-95 °C
         oilLevel: 40 + Math.random() * 60,  // 40-100 %
@@ -496,16 +587,35 @@ const App = () => {
         tyrePressure: metrics.tyrePressure < 90,
         batteryHealth: metrics.batteryHealth < 20,
       };
-      return {id, name: `Fahrzeug ${idx + 1}`, model, year, mileage, lastServiceDate, nextServiceDate, metrics, history, warnings, icon: IconComp};
+      return {
+        id,
+        name: `Fahrzeug ${idx + 1}`,
+        model,
+        year,
+        mileage,
+        lastServiceDate,
+        nextServiceDate,
+        metrics,
+        history,
+        warnings,
+        icon: IconComp,
+        location: {lat, lng},
+        markerIcon,
+        route,
+        routeIndex,
+        isMoving,
+        dest,
+        routeIsReal,
+      };
     });
     return newFleet;
   }, []);
 
   // Slider controlled vehicle count
-  const [vehicleCount, setVehicleCount] = useState(24);
+  const [vehicleCount, setVehicleCount] = useState(6); // initial vehicle count
   const [expandedVehicles, setExpandedVehicles] = useState([]); // ids of expanded tiles
   const [currentPage, setCurrentPage] = useState(0);
-  const vehiclesPerPage = 24;
+  const vehiclesPerPage = 12;
 
   // Regenerate fleet when vehicleCount changes (resetting timeline & notifications)
   useEffect(() => {
@@ -530,6 +640,60 @@ const App = () => {
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   },[]);
+
+  // NEW: fixed center of map (Europe)
+  const mapCenter = [51, 10];
+
+  // movement interval – advance vehicles that are on a route
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setVehicles(prev => prev.map(v => {
+        if (!v.route || v.route.length === 0) return v;
+        const nextIndex = (v.routeIndex + 1) % v.route.length;
+        return {
+          ...v,
+          routeIndex: nextIndex,
+          location: v.route[nextIndex],
+        };
+      }));
+    }, 4000); // every 4 s
+    return () => clearInterval(iv);
+  }, []);
+
+  // fetch real street routes from OSRM for moving vehicles that still have synthetic routes
+  useEffect(() => {
+    vehicles.forEach((v) => {
+      if (!v.isMoving) return;
+      if (v.routeIsReal) return; // already real
+      if (!v.dest) return;
+      if (routeFetchInProgress.current.has(v.id)) return;
+
+      routeFetchInProgress.current.add(v.id);
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${v.location.lng},${v.location.lat};${v.dest.lng},${v.dest.lat}?overview=full&geometries=geojson`;
+
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
+            const coords = data.routes[0].geometry.coordinates.map(([lon, lat]) => ({ lat, lng: lon }));
+            if (coords.length > 2) {
+              setVehicles((prev) =>
+                prev.map((pv) =>
+                  pv.id === v.id ? { ...pv, route: coords, routeIndex: 0, location: coords[0], routeIsReal: true } : pv
+                )
+              );
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('OSRM fetch failed', err);
+        })
+        .finally(() => {
+          routeFetchInProgress.current.delete(v.id);
+        });
+    });
+  }, [vehicles]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} p-6`}>
@@ -659,7 +823,7 @@ const App = () => {
                     {React.createElement(vehicle.icon, {size:24,className:"mr-2 text-blue-600 dark:text-blue-400"})}
                     <div>
                       <h3 className="text-sm font-semibold">{vehicle.name}</h3>
-                      <p className="text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}">{vehicle.model} · {vehicle.year}</p>
+                      <p className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{vehicle.model} · {vehicle.year}</p>
                     </div>
                   </div>
                   <span className="text-xs opacity-70">{isExpanded ? '▼' : '▲'}</span>
@@ -1013,6 +1177,31 @@ const App = () => {
               </ResponsiveContainer>
             </div>
           )}
+        </div>
+
+        {/* NEW: Vehicle Map */}
+        <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Fahrzeugpositionen</h2>
+          <div className="w-full" style={{height:'40rem'}}>
+            <MapContainer center={mapCenter} zoom={6} scrollWheelZoom={false} className="h-full w-full rounded-lg">
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {/* render routes and moving markers */}
+              {vehicles.map(v => v.route ? (
+                <Polyline key={v.id + "_line"} positions={v.route.map(p => [p.lat, p.lng])} pathOptions={{ color: '#2563eb', weight: 2, dashArray: '6 4', opacity: 0.4 }} />
+              ) : null)}
+              {vehicles.map(v => (
+                <Marker key={v.id} position={[v.location.lat, v.location.lng]} icon={v.markerIcon}>
+                  <Popup>
+                    <div className="text-sm font-semibold">{v.name}</div>
+                    <div className="text-xs">{v.model} · {v.year}</div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </div>
         </div>
       </div>
     </div>
