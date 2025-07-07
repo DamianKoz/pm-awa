@@ -6,6 +6,8 @@ const LCAPApplicationService = require('@sap/low-code-event-handler');
 const on_registervehicle_Logic = require('./code/on-registervehicle-logic');
 const vehicles_on_createroute_Logic = require('./code/vehicles-on-createroute-logic');
 const vehicles_on_measurealltelemetry_Logic = require('./code/vehicles-on-measurealltelemetry-logic');
+const on_simulationStep_Logic = require('./code/on-simulationStep-logic');
+const on_setsimulationstepinterval_Logic = require('./code/on-setsimulationstepinterval-logic');
 
 class MaintainanceService extends LCAPApplicationService {
     async init() {
@@ -19,10 +21,17 @@ class MaintainanceService extends LCAPApplicationService {
             return await vehicles_on_createroute_Logic(request);
         });
 
-        this.on('MeasureAllTelemetry', async (request) => {
+        this.on('MeasureAllTelemetry', 'Vehicles', async (request) => {
             return await vehicles_on_measurealltelemetry_Logic(request);
         });
 
+        this.on('simulationStep', async (request) => {
+            return await on_simulationStep_Logic(request);
+        });
+
+        this.on('SetSimulationStepInterval', async (request) => {
+            return await on_setsimulationstepinterval_Logic(request);
+        });
 
         return super.init();
     }

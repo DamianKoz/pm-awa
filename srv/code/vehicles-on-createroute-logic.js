@@ -52,7 +52,10 @@ module.exports = async function (req) {
 		geometry: {
 			route_ID: routeID,
 			type: rawRoute.geometry.type,
-			coordinates: rawRoute.geometry.coordinates.map(coord => ({
+			// we need to determine an index, because odata would lose the order of the coordinates
+			coordinatesCount: rawRoute.geometry.coordinates.length,
+			coordinates: rawRoute.geometry.coordinates.map((coord, index) => ({
+				index : index,
 				latitude: coord[1],
 				longitude: coord[0],
 			})),
@@ -61,7 +64,7 @@ module.exports = async function (req) {
 
 	// create a new route
 	await INSERT.into(Routes).entries(route)
-	await UPDATE(Vehicles, ID).with({ activeRoute_ID: route.ID })
+	await UPDATE(Vehicles, ID).with({ activeRoute_ID: route.ID, activeRouteIndex: 0 })
 
 	return route
   }

@@ -1,17 +1,20 @@
 using { componentX as my} from '../db/schema.cds';
 
 @path: '/service/MaintainanceService'
+@requires : 'any' // no auth
 service MaintainanceService {
 
     entity Vehicles as projection on my.Vehicles {
         *,
         model.name as model_name,
     } actions {
-        action CreateRoute(
+        action CreateRoute
+        (
             destinationLocation_ID : Locations:ID,
         ) returns Routes;
 
-        action MeasureAllTelemetry(
+        action MeasureAllTelemetry
+        (
         ) returns many Telemetry;
     };
     entity Telemetry as projection on my.Telemetry;
@@ -29,4 +32,9 @@ service MaintainanceService {
         longitude : Decimal(9,6),
     ) returns Vehicles;
 
+    action SetSimulationStepInterval
+    (
+        interval : Integer
+            @mandatory,
+    );
 }

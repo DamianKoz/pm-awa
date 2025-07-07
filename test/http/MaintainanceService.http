@@ -2,6 +2,16 @@
 @username=alice
 @password=
 
+### setsimulationstepinterval
+# @name setsimulationstepinterval
+POST {{server}}/service/MaintainanceService/SetSimulationStepInterval
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "interval": 1
+}
+
 
 ### Vehicles Register
 # @name Register_Vehicle
@@ -15,7 +25,7 @@ Authorization: Basic {{username}} {{password}}
 
 
 ### Create Route
-# @name Register_Vehicle
+# @name Create_Route
 POST {{server}}/service/MaintainanceService/Vehicles({{Register_Vehicle.response.body.ID}})/CreateRoute
 Content-Type: application/json
 Authorization: Basic {{username}} {{password}}
