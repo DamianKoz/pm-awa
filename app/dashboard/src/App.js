@@ -11,6 +11,8 @@ import {
   Scatter,
   BarChart,
   Bar,
+  Cell,
+  Legend,
 } from "recharts";
 import {
   Play,
@@ -461,6 +463,18 @@ const App = () => {
     .filter((e) => e.type === "history")
     .map((e) => ({time: e.time.getTime(), y: 0, desc: e.description}));
 
+  // Prepare system overview data per metric
+  const systemOverviewData = Object.entries(vehicleConfigs).map(([metricKey, cfg]) => {
+    const avg = vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics[metricKey], 0) / vehicles.length : 0;
+    const warnPercent = vehicles.length ? (vehicles.filter(v => v.warnings[metricKey]).length / vehicles.length) * 100 : 0;
+    return {
+      name: cfg.name,
+      avg: Number(avg.toFixed(1)),
+      warn: Number(warnPercent.toFixed(1)),
+      color: cfg.color,
+    };
+  });
+
   // define major inland city hubs for plausible vehicle positions
   const cityHubs = [
     // Germany (selection)
@@ -721,21 +735,6 @@ const App = () => {
                   >
                     {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
                   </button>
-                  {/* Simulation speed slider (header) */}
-                  <div className="flex items-center gap-1">
-                    <input
-                      id="simSpeedHeader"
-                      type="range"
-                      min="0.25"
-                      max="4"
-                      step="0.25"
-                      value={simulationSpeed}
-                      onChange={(e) => setSimulationSpeed(Number(e.target.value))}
-                      className="accent-yellow-300 cursor-pointer h-2"
-                      style={{width: headerCollapsed ? '4rem' : '6rem'}}
-                    />
-                    <span className="text-xs w-6 text-right select-none">{simulationSpeed}x</span>
-                  </div>
                   {/* Bell */}
                   <div className="relative">
                     <button onClick={()=>setShowInbox(s=>!s)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
@@ -783,31 +782,74 @@ const App = () => {
               <p className="text-xs opacity-60">Warnschwellen (ML-Vorhersage)</p>
             </div>
             <div className="flex gap-6 flex-wrap items-center">
-              <div className="flex items-center gap-3">
-                <label htmlFor="vehicleCount" className="text-sm whitespace-nowrap">Fahrzeuge: <span className="font-semibold">{vehicleCount}</span></label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="vehicleCount" className="text-sm whitespace-nowrap">Fahrzeuge:</label>
                 <input
                   id="vehicleCount"
                   type="range"
-                  min="5"
+                  min="1"
                   max="200"
+                  list="vehicleTicks"
                   value={vehicleCount}
                   onChange={(e) => setVehicleCount(Number(e.target.value))}
-                  className="accent-blue-600 cursor-pointer"
+                  className="accent-blue-600 cursor-pointer w-40"
                 />
+                <input
+                  type="number"
+                  min="1"
+                  max="200"
+                  value={vehicleCount}
+                  onChange={(e)=>{
+                    const val = Number(e.target.value);
+                    if(!isNaN(val)) setVehicleCount(Math.min(200, Math.max(1, val)));
+                  }}
+                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
+                />
+                <datalist id="vehicleTicks">
+                  <option value="1"/>
+                  <option value="50"/>
+                  <option value="100"/>
+                  <option value="150"/>
+                  <option value="200"/>
+                </datalist>
               </div>
               {/* Simulation speed control */}
-              <div className="flex items-center gap-3">
-                <label htmlFor="simSpeed" className="text-sm whitespace-nowrap">Tempo: <span className="font-semibold">{simulationSpeed}x</span></label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="simSpeed" className="text-sm whitespace-nowrap">Tempo:</label>
                 <input
                   id="simSpeed"
                   type="range"
                   min="0.25"
-                  max="4"
+                  max="10"
                   step="0.25"
+                  list="speedTicks"
                   value={simulationSpeed}
                   onChange={(e) => setSimulationSpeed(Number(e.target.value))}
-                  className="accent-blue-600 cursor-pointer"
+                  className="accent-blue-600 cursor-pointer w-40"
                 />
+                <input
+                  type="number"
+                  min="0.25"
+                  max="10"
+                  step="0.25"
+                  value={simulationSpeed}
+                  onChange={(e)=>{
+                    const val = parseFloat(e.target.value);
+                    if(!isNaN(val)) setSimulationSpeed(Math.min(10, Math.max(0.25, val)));
+                  }}
+                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
+                />
+                <span className="text-sm">x</span>
+                <datalist id="speedTicks">
+                  <option value="0.25"/>
+                  <option value="0.5"/>
+                  <option value="1"/>
+                  <option value="2"/>
+                  <option value="4"/>
+                  <option value="6"/>
+                  <option value="8"/>
+                  <option value="10"/>
+                </datalist>
               </div>
               <button
                 onClick={resetVehicles}
@@ -1108,28 +1150,8 @@ const App = () => {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={[
-                  {
-                    name: "Temperatur",
-                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.engineTemp, 0) / vehicles.length : 0,
-                    fill: "#ef4444",
-                  },
-                  {
-                    name: "Ölstand",
-                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.oilLevel, 0) / vehicles.length : 0,
-                    fill: "#f59e0b",
-                  },
-                  {
-                    name: "Reifendruck",
-                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.tyrePressure, 0) / vehicles.length : 0,
-                    fill: "#06b6d4",
-                  },
-                  {
-                    name: "Batteriekapazität",
-                    value: vehicles.length ? vehicles.reduce((sum, v) => sum + v.metrics.batteryHealth, 0) / vehicles.length : 0,
-                    fill: "#8b5cf6",
-                  },
-                ]}
+                data={systemOverviewData}
+                barCategoryGap={20}
               >
                 <CartesianGrid 
                   strokeDasharray="3 3" 
@@ -1150,11 +1172,15 @@ const App = () => {
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                   }}
                 />
-                <Bar 
-                  dataKey="value" 
-                  radius={[4, 4, 0, 0]}
-                  animationDuration={2000}
-                />
+                <Legend wrapperStyle={{fontSize: '0.75rem'}} />
+                {/* Average metric values */}
+                <Bar dataKey="avg" name="Durchschnitt" radius={[4,4,0,0]} animationDuration={1500}>
+                  {systemOverviewData.map((entry,index)=>(
+                    <Cell key={`avg-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+                {/* Percentage of vehicles with warnings */}
+                <Bar dataKey="warn" name="% Warnungen" radius={[4,4,0,0]} fill="#dc2626" animationDuration={1500} />
               </BarChart>
             </ResponsiveContainer>
           </div>
