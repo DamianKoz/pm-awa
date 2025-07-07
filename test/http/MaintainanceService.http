@@ -1,0 +1,256 @@
+@server=http://localhost:4004
+@username=alice
+@password=
+
+
+### Vehicles Register
+# @name Register_Vehicle
+POST {{server}}/service/MaintainanceService/RegisterVehicle
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "name": "My Vehicle X"
+}
+
+
+### Create Route
+# @name Register_Vehicle
+POST {{server}}/service/MaintainanceService/Vehicles({{Register_Vehicle.response.body.ID}})/CreateRoute
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+}
+
+
+### Vehicles
+# @name Vehicles_GET
+GET {{server}}/service/MaintainanceService/Vehicles?$expand=routes($expand=geometry)
+Authorization: Basic {{username}} {{password}}
+
+
+
+### Vehicles
+# @name Vehicles_DELETE
+DELETE {{server}}/service/MaintainanceService/Vehicles/21529600-4adf-437d-b9cf-9dc840e0451f
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+
+### Telemetry
+# @name Telemetry_GET
+GET {{server}}/service/MaintainanceService/Telemetry
+Authorization: Basic {{username}} {{password}}
+
+
+### Telemetry
+# @name Telemetry_POST
+POST {{server}}/service/MaintainanceService/Telemetry
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "16000134-f29b-459a-957c-4147e246b46f",
+  "sensor": "sensor-1600013",
+  "value": 785851.147,
+  "unit": "it-1600013",
+  "createdAt": "2023-02-16T23:00:00.000Z",
+  "createdBy": "createdBy.yakt@example.net",
+  "modifiedAt": "2008-04-06T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.yakt@example.net"
+}
+
+
+### Telemetry
+# @name Telemetry_PATCH
+PATCH {{server}}/service/MaintainanceService/Telemetry/16000134-f29b-459a-957c-4147e246b46f
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "16000134-f29b-459a-957c-4147e246b46f",
+  "sensor": "sensor-1600013",
+  "value": 785851.147,
+  "unit": "it-1600013",
+  "createdAt": "2023-02-16T23:00:00.000Z",
+  "createdBy": "createdBy.yakt@example.net",
+  "modifiedAt": "2008-04-06T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.yakt@example.net"
+}
+
+
+### Telemetry
+# @name Telemetry_DELETE
+DELETE {{server}}/service/MaintainanceService/Telemetry/16000134-f29b-459a-957c-4147e246b46f
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+
+### Warnings
+# @name Warnings_GET
+GET {{server}}/service/MaintainanceService/Warnings
+Authorization: Basic {{username}} {{password}}
+
+
+### Warnings
+# @name Warnings_POST
+POST {{server}}/service/MaintainanceService/Warnings
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "26084681-9d6d-475d-b5ac-61ef217bfeed",
+  "vehicle": {
+    "ID": "21529600-4adf-437d-b9cf-9dc840e0451f"
+  },
+  "sensor": "sensor-26084681",
+  "value": 793750.131,
+  "triggeredAt": "2005-03-13T23:00:00.000Z",
+  "cleared": false,
+  "createdAt": "2015-04-16T23:00:00.000Z",
+  "createdBy": "createdBy.fj32h@example.net",
+  "modifiedAt": "2019-10-28T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.fj32h@example.net"
+}
+
+
+### Warnings
+# @name Warnings_PATCH
+PATCH {{server}}/service/MaintainanceService/Warnings/26084681-9d6d-475d-b5ac-61ef217bfeed
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "26084681-9d6d-475d-b5ac-61ef217bfeed",
+  "vehicle": {
+    "ID": "21529600-4adf-437d-b9cf-9dc840e0451f"
+  },
+  "sensor": "sensor-26084681",
+  "value": 793750.131,
+  "triggeredAt": "2005-03-13T23:00:00.000Z",
+  "cleared": false,
+  "createdAt": "2015-04-16T23:00:00.000Z",
+  "createdBy": "createdBy.fj32h@example.net",
+  "modifiedAt": "2019-10-28T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.fj32h@example.net"
+}
+
+
+### Warnings
+# @name Warnings_DELETE
+DELETE {{server}}/service/MaintainanceService/Warnings/26084681-9d6d-475d-b5ac-61ef217bfeed
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+
+### Predictions
+# @name Predictions_GET
+GET {{server}}/service/MaintainanceService/Predictions
+Authorization: Basic {{username}} {{password}}
+
+
+### Predictions
+# @name Predictions_POST
+POST {{server}}/service/MaintainanceService/Predictions
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "16122696-7c23-47f6-b041-fb727f3f506e",
+  "component": "component-16122696",
+  "recommendedAt": "2006-08-21T23:00:00.000Z",
+  "latestAt": "2005-07-15T23:00:00.000Z",
+  "confidence": 830548.117,
+  "priority": "Low",
+  "reason": "reason-16122696",
+  "createdAt": "2010-03-10T23:00:00.000Z",
+  "createdBy": "createdBy.9lkco@example.org",
+  "modifiedAt": "2019-04-29T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.9lkco@example.net"
+}
+
+
+### Predictions
+# @name Predictions_PATCH
+PATCH {{server}}/service/MaintainanceService/Predictions/16122696-7c23-47f6-b041-fb727f3f506e
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "16122696-7c23-47f6-b041-fb727f3f506e",
+  "component": "component-16122696",
+  "recommendedAt": "2006-08-21T23:00:00.000Z",
+  "latestAt": "2005-07-15T23:00:00.000Z",
+  "confidence": 830548.117,
+  "priority": "Low",
+  "reason": "reason-16122696",
+  "createdAt": "2010-03-10T23:00:00.000Z",
+  "createdBy": "createdBy.9lkco@example.org",
+  "modifiedAt": "2019-04-29T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.9lkco@example.net"
+}
+
+
+### Predictions
+# @name Predictions_DELETE
+DELETE {{server}}/service/MaintainanceService/Predictions/16122696-7c23-47f6-b041-fb727f3f506e
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+
+### Maintenances
+# @name Maintenances_GET
+GET {{server}}/service/MaintainanceService/Maintenances
+Authorization: Basic {{username}} {{password}}
+
+
+### Maintenances
+# @name Maintenances_POST
+POST {{server}}/service/MaintainanceService/Maintenances
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "28196914-e095-4f4f-a044-7e696c0f7ddb",
+  "component": "component-28196914",
+  "planned": true,
+  "status": "Completed",
+  "cost": 27417892.15,
+  "duration": 193.23,
+  "description": "description-28196914",
+  "performedOn": "2005-11-10",
+  "createdAt": "2019-03-13T23:00:00.000Z",
+  "createdBy": "createdBy.gscvm@example.net",
+  "modifiedAt": "2012-09-21T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.gscvm@example.net"
+}
+
+
+### Maintenances
+# @name Maintenances_PATCH
+PATCH {{server}}/service/MaintainanceService/Maintenances/28196914-e095-4f4f-a044-7e696c0f7ddb
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+{
+  "ID": "28196914-e095-4f4f-a044-7e696c0f7ddb",
+  "component": "component-28196914",
+  "planned": true,
+  "status": "Completed",
+  "cost": 27417892.15,
+  "duration": 193.23,
+  "description": "description-28196914",
+  "performedOn": "2005-11-10",
+  "createdAt": "2019-03-13T23:00:00.000Z",
+  "createdBy": "createdBy.gscvm@example.net",
+  "modifiedAt": "2012-09-21T23:00:00.000Z",
+  "modifiedBy": "modifiedBy.gscvm@example.net"
+}
+
+
+### Maintenances
+# @name Maintenances_DELETE
+DELETE {{server}}/service/MaintainanceService/Maintenances/28196914-e095-4f4f-a044-7e696c0f7ddb
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}

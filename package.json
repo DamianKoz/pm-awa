@@ -5,17 +5,43 @@
   "repository": "<Add your repository here>",
   "license": "UNLICENSED",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@sap/cds": "^8",
-    "express": "^4"
+    "@sap/cds": "^9",
+    "express": "^4",
+    "@sap/xssec": "^4",
+    "@sap/low-code-event-handler": "^1.2.5",
+    "@cap-js-community/websocket": "^1.7.1"
   },
   "devDependencies": {
-    "@cap-js/cds-types": "^0.9.0",
-    "@cap-js/sqlite": "^1",
-    "concurrently": "^9.1.2"
+    "@sap/cds-dk": "^9",
+    "@cap-js/cds-types": "^0.11.0",
+    "@cap-js/sqlite": "^2",
+    "concurrently": "^9.1.2",
+    "@sap/dev-cap-tools": "^1.47.0"
   },
   "scripts": {
     "start": "cds-serve",
-    "start:dev": "concurrently \"cds-watch\" \"npm --prefix app/dashboard run start\""
+    "start-local": "npm run generate-entry-point && cds watch",
+    "start:dev": "concurrently \"cds-watch\" \"npm --prefix app/dashboard run start\"",
+    "generate-entry-point": "dev-cap-tools gen-entrypoint"
+  },
+  "cds": {
+    "requires": {
+      "ExternalCityHubService": {
+        "kind": "rest",
+        "credentials": {
+          "url": "https://wft-geo-db.p.rapidapi.com/v1/geo/cities?minPopulation=50000&limit=10000"
+        }
+      },
+      "ExternalRouteService": {
+        "kind": "rest",
+        "credentials": {
+          "url": "https://router.project-osrm.org"
+        }
+      }
+    }
   }
 }
