@@ -42,110 +42,17 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // declarations have been removed for compatibility. Feel free to migrate to
 // TypeScript (`.tsx`) in the future.
 
+// NEW: backend API base (can be configured via env var)
+const BACKEND_BASE_URL = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:4004').replace(/\/$/, '');
+const API_BASE = `${BACKEND_BASE_URL}/service/MaintainanceService`;
+
 const App = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1); // Simulation speed multiplier (1x default)
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [vehicles, setVehicles] = useState([]);
   const [fleetPredictions, setFleetPredictions] = useState([]);
-  const [maintenanceHistory] = useState([
-    {
-      date: "2024-05-20",
-      component: "Kühlsystem",
-      type: "Planmäßig",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 8",
-      technician: "Michael Weber",
-      cost: 450,
-      description: "Kühlflüssigkeit gewechselt, Thermostat überprüft",
-      planned: true,
-      duration: "2.5h"
-    },
-    {
-      date: "2024-05-18",
-      component: "Ölwechsel",
-      type: "Ungeplant",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 15",
-      technician: "Sarah Müller",
-      cost: 280,
-      description: "Ölstand kritisch, sofortiger Wechsel erforderlich",
-      planned: false,
-      duration: "1.5h"
-    },
-    {
-      date: "2024-05-15",
-      component: "Reifendruck",
-      type: "Planmäßig",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 3",
-      technician: "Thomas Schmidt",
-      cost: 120,
-      description: "Alle Reifen auf Soll-Druck gebracht, Ventile überprüft",
-      planned: true,
-      duration: "1h"
-    },
-    {
-      date: "2024-05-12",
-      component: "Batteriewechsel",
-      type: "Ungeplant",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 22",
-      technician: "Andreas Fischer",
-      cost: 380,
-      description: "Batterie defekt, neue AGM-Batterie eingebaut",
-      planned: false,
-      duration: "2h"
-    },
-    {
-      date: "2024-05-10",
-      component: "Bremsen",
-      type: "Planmäßig",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 7",
-      technician: "Lisa Wagner",
-      cost: 520,
-      description: "Bremsbeläge gewechselt, Bremsscheiben überprüft",
-      planned: true,
-      duration: "3h"
-    },
-    {
-      date: "2024-05-08",
-      component: "Luftfilter",
-      type: "Planmäßig",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 12",
-      technician: "Michael Weber",
-      cost: 85,
-      description: "Motorluftfilter und Kabinenfilter gewechselt",
-      planned: true,
-      duration: "0.8h"
-    },
-    {
-      date: "2024-05-05",
-      component: "Getriebeöl",
-      type: "Ungeplant",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 19",
-      technician: "Sarah Müller",
-      cost: 320,
-      description: "Getriebeöl undicht, Dichtung erneuert",
-      planned: false,
-      duration: "2.2h"
-    },
-    {
-      date: "2024-05-02",
-      component: "Scheinwerfer",
-      type: "Planmäßig",
-      status: "Abgeschlossen",
-      vehicle: "Fahrzeug 4",
-      technician: "Thomas Schmidt",
-      cost: 95,
-      description: "Scheinwerfer ausgerichtet, Glühbirnen gewechselt",
-      planned: true,
-      duration: "1.2h"
-    }
-  ]);
+  const [maintenanceHistory, setMaintenanceHistory] = useState([]);
 
   // Timeline of issues/warnings
   const [timeline, setTimeline] = useState([]); // {time, title, description, type}
@@ -159,69 +66,6 @@ const App = () => {
 
   // track which vehicle routes are currently being fetched to avoid duplicate requests
   const routeFetchInProgress = useRef(new Set());
-
-  // Sensor simulation logic
-  const updateVehicleMetric = useCallback((vehicleId, metricKey) => {
-    setVehicles((prev) => {
-      const vehicle = prev.find(v => v.id === vehicleId);
-      if (!vehicle) return prev;
-
-      let newValue = vehicle.metrics[metricKey];
-      const timestamp = Date.now();
-
-      switch (metricKey) {
-        case "engineTemp":
-          newValue =
-            Math.random() > 0.95
-              ? Math.min(100, vehicle.metrics[metricKey] + (Math.random() - 0.5) * 2)
-              : Math.max(70, vehicle.metrics[metricKey] + (Math.random() - 0.5) * 0.5);
-          break;
-        case "oilLevel":
-          newValue = Math.max(0, vehicle.metrics[metricKey] - Math.random() * 0.25);
-          break;
-        case "tyrePressure":
-          const oilRatio = vehicle.metrics.oilLevel / 100;
-          newValue = 90 + oilRatio * 25 + (Math.random() - 0.5) * 5;
-          break;
-        case "batteryHealth":
-          newValue = Math.max(0, vehicle.metrics[metricKey] - Math.random() * 0.1);
-          break;
-        default:
-          break;
-      }
-
-      const newHistory = [
-        ...vehicle.history[metricKey],
-        {time: timestamp, value: newValue},
-      ].slice(-20); // Keep only last 20 points
-
-      const warning =
-        (metricKey === "engineTemp" && newValue > 90) ||
-        (metricKey === "oilLevel" && newValue < 20) ||
-        (metricKey === "tyrePressure" && newValue < 90) ||
-        (metricKey === "batteryHealth" && newValue < 20);
-
-      return prev.map(v =>
-        v.id === vehicleId
-          ? {
-              ...v,
-              metrics: {
-                ...v.metrics,
-                [metricKey]: newValue,
-              },
-              history: {
-                ...v.history,
-                [metricKey]: newHistory,
-              },
-              warnings: {
-                ...v.warnings,
-                [metricKey]: warning,
-              },
-            }
-          : v
-      );
-    });
-  }, []);
 
   // Calculate predictions based on sensor values
   const calculateFleetPredictions = useCallback(() => {
@@ -326,24 +170,6 @@ const App = () => {
     });
   }, [vehicles]);
 
-  // Update sensors every 6 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      vehicles.forEach((vehicle) => {
-        Object.keys(vehicle.metrics).forEach((metricKey) => {
-          updateVehicleMetric(vehicle.id, metricKey);
-        });
-      });
-    }, 6000 / simulationSpeed);
-
-    return () => clearInterval(interval);
-  }, [vehicles, updateVehicleMetric, simulationSpeed]);
-
-  // Recalculate predictions when sensors change
-  useEffect(() => {
-    calculateFleetPredictions();
-  }, [vehicles, calculateFleetPredictions]);
-
   // Detect new sensor warnings
   useEffect(() => {
     const prev = prevVehiclesRef.current;
@@ -397,22 +223,203 @@ const App = () => {
     }
   }, [darkMode]);
 
-  // Seed timeline with historic maintenance events on mount
+  // Seed timeline from backend maintenance history whenever it changes
   useEffect(() => {
+    if (!maintenanceHistory || maintenanceHistory.length === 0) return;
     const historyEvents = maintenanceHistory.map((entry) => ({
       time: new Date(entry.date),
-      title: "Wartung abgeschlossen",
+      title: 'Wartung abgeschlossen',
       description: `${entry.component} | ${entry.type}`,
-      type: "history",
-      vehicleId: entry.component.split(' ')[1], // Assuming vehicle name is after the first space
+      type: 'history',
+      vehicleId: entry.vehicle,
     }));
     setTimeline((prev) => [...historyEvents.reverse(), ...prev]);
-  }, []); // run once after initial mount
+  }, [maintenanceHistory]);
+
+  /**
+   * Fetch data from CAP MaintainanceService backend
+   */
+  const fetchBackendData = useCallback(async () => {
+    try {
+      // 1) Vehicles with metrics and full route geometry
+      const expand = [
+        'model',
+        'metrics($expand=sensor)',
+        'activeRoute($expand=geometry($select=*))'
+      ].join(',');
+      const vehiclesRes = await fetch(`${API_BASE}/Vehicles?$expand=${expand}`);
+      const vehiclesJson = await vehiclesRes.json();
+      const vehiclesArr = vehiclesJson.value ?? vehiclesJson;
+
+      // Helper to build Leaflet icons (reuse existing logic)
+      const buildMarkerIcon = (IconComp) => {
+        const iconHtml = renderToStaticMarkup(
+          React.createElement(IconComp, { size: 24, color: '#2563eb' })
+        );
+        return L.divIcon({ html: iconHtml, className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+      };
+
+      // 2) Process each vehicle with already expanded telemetry (metrics)
+      const builtVehicles = vehiclesArr.map((v) => {
+        // map backend route geometry -> array of {lat,lng}
+        let routeCoords = null;
+        if (v.activeRoute && v.activeRoute.geometry && Array.isArray(v.activeRoute.geometry.coordinates)) {
+          routeCoords = v.activeRoute.geometry.coordinates
+            .slice()
+            .sort((a,b)=> (a.index ?? 0) - (b.index ?? 0))
+            .map((c)=> ({ lat: Number(c.latitude), lng: Number(c.longitude) }));
+        }
+
+        // pick vehicle location: prefer live latitude/longitude, else first route point
+        const currentLocation = {
+          lat: v.latitude ?? (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lat),
+          lng: v.longitude ?? (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lng),
+        };
+
+        const icon = Truck; // generic icon – refine if needed
+
+        // build KPI metrics from v.metrics array
+        const metricsRaw = Array.isArray(v.metrics) ? v.metrics : [];
+        const pickValue = (pattern) => {
+          const row = metricsRaw.find(m=> m.sensor?.name && pattern.test(m.sensor.name));
+          return row ? Number(row.value) : 0;
+        };
+
+        const metrics = {
+          engineTemp: pickValue(/engine coolant/i),
+          oilLevel: pickValue(/engine oil level/i),
+          tyrePressure: pickValue(/tyre pressure/i),
+          batteryHealth: pickValue(/battery soc/i),
+        };
+
+        const history = {};
+        Object.keys(metrics).forEach((k) => {
+          history[k] = [{ time: Date.now(), value: metrics[k] }];
+        });
+
+        const warnings = {
+          engineTemp: metrics.engineTemp > 90,
+          oilLevel: metrics.oilLevel < 20,
+          tyrePressure: metrics.tyrePressure < 90,
+          batteryHealth: metrics.batteryHealth < 20,
+        };
+
+        const built = {
+          id: v.ID,
+          name: v.name ?? `Fahrzeug`,
+          model: v.model_name ?? v.model?.name ?? '',
+          year: v.year,
+          mileage: v.mileage,
+          lastServiceDate: v.lastServiceDate,
+          nextServiceDate: v.nextServiceDate,
+          metrics,
+          history,
+          warnings,
+          icon,
+          location: currentLocation,
+          markerIcon: buildMarkerIcon(icon),
+          route: routeCoords,
+          routeIndex: v.activeRouteIndex ?? 0,
+          isMoving: v.isMoving,
+          dest: null,
+          routeIsReal: true,
+        };
+        return built;
+      });
+
+      setVehicles(builtVehicles);
+      prevVehiclesRef.current = builtVehicles;
+
+      // 4) Predictions
+      try {
+        const predRes = await fetch(`${API_BASE}/Predictions?$expand=vehicle,component`);
+        const predJson = await predRes.json();
+        const predArr = (predJson.value ?? predJson).map((p) => ({
+          component: p.component?.name ?? 'Komponente',
+          daysUntil: p.latestMaintenanceAt ? Math.max(1, Math.round((new Date(p.latestMaintenanceAt) - Date.now()) / 864e5)) : 0,
+          recommendedMaintenanceDays: p.recommendedMaintenanceAt ? Math.max(1, Math.round((new Date(p.recommendedMaintenanceAt) - Date.now()) / 864e5)) : 0,
+          confidence: p.recommendedMaintainanceConfidence ?? 80,
+          priority: p.priority ?? 'Mittel',
+          reason: p.reason ?? p.description ?? '',
+          vehicleId: p.vehicle_ID,
+        }));
+        setFleetPredictions(predArr);
+      } catch (e) {
+        console.error('Predictions fetch failed', e);
+      }
+
+      // 5) Maintenance history
+      try {
+        const maintRes = await fetch(`${API_BASE}/Maintenances?$expand=vehicle,component`);
+        const maintJson = await maintRes.json();
+        const maintArr = maintJson.value ?? maintJson;
+        const history = maintArr.map((m) => ({
+          date: m.performedOn ?? m.createdAt ?? new Date().toISOString(),
+          component: m.component?.name ?? 'Komponente',
+          type: m.planned ? 'Planmäßig' : 'Ungeplant',
+          status: m.status ?? 'Abgeschlossen',
+          vehicle: builtVehicles.find((v) => v.id === m.vehicle_ID)?.name ?? '',
+          technician: m.modifiedBy ?? '',
+          cost: m.cost ?? 0,
+          description: m.description ?? '',
+          planned: m.planned,
+          duration: m.duration ? `${m.duration}h` : '',
+        }));
+        setMaintenanceHistory(history);
+      } catch (e) {
+        console.error('Maintenance history fetch failed', e);
+      }
+    } catch (err) {
+      console.error('Backend fetch failed', err);
+    }
+  }, []);
+
+  // Initial load + periodic refresh every 20 s
+  useEffect(() => {
+    fetchBackendData();
+    const iv = setInterval(fetchBackendData, 20000);
+    return () => clearInterval(iv);
+  }, [fetchBackendData]);
+
+  // Slider controlled vehicle count
+  const [expandedVehicles, setExpandedVehicles] = useState([]); // ids of expanded tiles
+  const [currentPage, setCurrentPage] = useState(0);
+  const vehiclesPerPage = 12;
+
+  const toggleExpand = (id) => {
+    setExpandedVehicles((prev) => prev.includes(id) ? prev.filter(v=>v!==id) : [...prev, id]);
+  };
+
+  // Add scroll listener effect after darkMode effect
+  useEffect(()=>{
+    const onScroll = () => {
+      setHeaderCollapsed(window.scrollY > 80);
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  },[]);
+
+  // NEW: fixed center of map (Europe)
+  const mapCenter = [51, 10];
+
+  // movement interval – advance vehicles that are on a route
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setVehicles(prev => prev.map(v => {
+        if (!v.route || v.route.length === 0) return v;
+        const nextIndex = (v.routeIndex + 1) % v.route.length;
+        return {
+          ...v,
+          routeIndex: nextIndex,
+          location: v.route[nextIndex],
+        };
+      }));
+    }, 4000 / simulationSpeed); // scaled by simulation speed
+    return () => clearInterval(iv);
+  }, [simulationSpeed]);
 
   const resetVehicles = () => {
-    const fleet = generateVehicles(vehicleCount);
-    setVehicles(fleet);
-    prevVehiclesRef.current = fleet;
+    fetchBackendData();
     setTimeline([]);
     setNotifications([]);
     setExpandedVehicles([]);
@@ -475,240 +482,16 @@ const App = () => {
     };
   });
 
-  // define major inland city hubs for plausible vehicle positions
-  const cityHubs = [
-    // Germany (selection)
-    {name:'Berlin',lat:52.52,lng:13.41},{name:'Hamburg',lat:53.55,lng:10.00},{name:'München',lat:48.14,lng:11.58},{name:'Köln',lat:50.94,lng:6.96},{name:'Frankfurt',lat:50.11,lng:8.68},{name:'Stuttgart',lat:48.78,lng:9.18},{name:'Düsseldorf',lat:51.23,lng:6.77},{name:'Leipzig',lat:51.34,lng:12.37},{name:'Dresden',lat:51.05,lng:13.74},{name:'Hannover',lat:52.38,lng:9.73},{name:'Nürnberg',lat:49.45,lng:11.08},{name:'Bremen',lat:53.08,lng:8.80},
-    // Austria
-    {name:'Wien',lat:48.21,lng:16.37},{name:'Salzburg',lat:47.80,lng:13.04},{name:'Graz',lat:47.07,lng:15.44},
-    // Switzerland
-    {name:'Zürich',lat:47.38,lng:8.54},{name:'Bern',lat:46.95,lng:7.44},{name:'Genf',lat:46.20,lng:6.15},
-    // France
-    {name:'Paris',lat:48.86,lng:2.35},{name:'Lyon',lat:45.76,lng:4.84},{name:'Marseille',lat:43.30,lng:5.37},{name:'Toulouse',lat:43.60,lng:1.44},{name:'Lille',lat:50.63,lng:3.07},
-    // Belgium / Netherlands / Luxembourg
-    {name:'Brüssel',lat:50.85,lng:4.35},{name:'Antwerpen',lat:51.22,lng:4.40},{name:'Amsterdam',lat:52.37,lng:4.90},{name:'Rotterdam',lat:51.92,lng:4.48},{name:'Luxemburg',lat:49.61,lng:6.13},
-    // UK / Ireland
-    {name:'London',lat:51.50,lng:-0.12},{name:'Manchester',lat:53.48,lng:-2.24},{name:'Birmingham',lat:52.48,lng:-1.90},{name:'Glasgow',lat:55.86,lng:-4.25},{name:'Dublin',lat:53.35,lng:-6.26},
-    // Spain / Portugal
-    {name:'Madrid',lat:40.42,lng:-3.70},{name:'Barcelona',lat:41.39,lng:2.17},{name:'Valencia',lat:39.47,lng:-0.38},{name:'Sevilla',lat:37.39,lng:-5.99},{name:'Lissabon',lat:38.72,lng:-9.14},
-    // Italy
-    {name:'Rom',lat:41.90,lng:12.50},{name:'Mailand',lat:45.46,lng:9.19},{name:'Neapel',lat:40.85,lng:14.27},{name:'Turin',lat:45.07,lng:7.69},{name:'Bologna',lat:44.50,lng:11.34},
-    // Scandinavia
-    {name:'Kopenhagen',lat:55.68,lng:12.57},{name:'Stockholm',lat:59.33,lng:18.07},{name:'Oslo',lat:59.91,lng:10.75},{name:'Göteborg',lat:57.71,lng:11.97},{name:'Helsinki',lat:60.17,lng:24.94},
-    // Eastern Europe
-    {name:'Warszawa',lat:52.23,lng:21.01},{name:'Kraków',lat:50.06,lng:19.94},{name:'Praha',lat:50.08,lng:14.43},{name:'Bratislava',lat:48.15,lng:17.11},{name:'Budapest',lat:47.50,lng:19.05},{name:'Zagreb',lat:45.81,lng:15.97},{name:'Ljubljana',lat:46.06,lng:14.51},{name:'Sofia',lat:42.70,lng:23.32},{name:'Bukarest',lat:44.43,lng:26.10},
-    // Northern Italy / Adriatic ports
-    {name:'Trieste',lat:45.65,lng:13.77},{name:'Venedig',lat:45.44,lng:12.33},
-    // Baltic states
-    {name:'Riga',lat:56.95,lng:24.11},{name:'Tallinn',lat:59.44,lng:24.75},{name:'Vilnius',lat:54.69,lng:25.28},
-    // Additional hubs
-    {name:'Porto',lat:41.15,lng:-8.62},{name:'Bilbao',lat:43.26,lng:-2.93},{name:'Málaga',lat:36.72,lng:-4.42},{name:'Seinäjoki',lat:62.79,lng:23.01}
-  ];
 
-  // helper to generate a slightly curved route between two hubs (~100 pts)
-  const generateRoute = (start, end, steps=120) => {
-    const points = [];
-    const dLat = end.lat - start.lat;
-    const dLng = end.lng - start.lng;
-    // perpendicular small offset to add curvature (0.02° ≈ 2 km)
-    const perpLat = -dLng;
-    const perpLng = dLat;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps; // 0..1
-      let lat = start.lat + dLat * t;
-      let lng = start.lng + dLng * t;
-      // add sine-based curve perpendicular to path
-      const curve = Math.sin(t * Math.PI) * 0.02; // peak offset 0.02°
-      lat += perpLat * curve;
-      lng += perpLng * curve;
-      points.push({ lat, lng });
-    }
-    return points;
-  };
-
-  // Generate mock vehicles
-  const generateVehicles = useCallback((count) => {
-    const modelPool = [
-      {name:'Mercedes Actros', icon: Truck},
-      {name:'MAN TGX', icon: Truck},
-      {name:'VW Crafter', icon: Car},
-      {name:'Mercedes Sprinter', icon: Car},
-      {name:'Setra S 531 DT', icon: Bus},
-      {name:"MAN Lion's Coach", icon: Bus},
-      {name:'BMW 5er Touring', icon: Car},
-      {name:'Scania R500', icon: Truck},
-      {name:'Scania R450', icon: Truck},
-      {name:'Scania S730', icon: Truck},
-      {name:'Scania P280', icon: Truck},
-      {name:'Scania G500', icon: Truck},
-      {name:'Scania L340', icon: Truck}
-    ];
-    const newFleet = Array.from({length: count}, (_, idx) => {
-      const id = `V-${idx + 1}`;
-      const {name:model, icon:IconComp} = modelPool[Math.floor(Math.random()*modelPool.length)];
-      const year = 2015 + Math.floor(Math.random()*8); // 2015-2022
-      // choose a random city hub and apply a small offset along a single axis to mimic being on a road close to that city
-      const hub = cityHubs[Math.floor(Math.random() * cityHubs.length)];
-      let lat = hub.lat;
-      let lng = hub.lng;
-      const offset = (Math.random() - 0.5) * 0.04; // ~ ±2-3 km
-      if (Math.random() < 0.5) {
-        lat += offset; // north-south oriented road
-      } else {
-        lng += offset; // east-west oriented road
-      }
-      const isMoving = Math.random() < 0.6; // 60% of vehicles on the road
-      let route = null;
-      let routeIndex = 0;
-      let dest = null;
-      let routeIsReal = false;
-      if (isMoving) {
-        // choose destination hub different from start
-        do {
-          dest = cityHubs[Math.floor(Math.random() * cityHubs.length)];
-        } while (dest === hub);
-        // initial synthetic fallback route (will be replaced once real route fetched)
-        route = generateRoute(hub, dest);
-        routeIndex = 0;
-        routeIsReal = false;
-      }
-      // build a custom Leaflet SVG icon using the same Lucide icon used in the list
-      const iconHtml = renderToStaticMarkup(React.createElement(IconComp, { size: 24, color: '#2563eb' }));
-      const markerIcon = L.divIcon({
-        html: iconHtml,
-        className: '',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
-      const metrics = {
-        engineTemp: 65 + Math.random() * 30, // 65-95 °C
-        oilLevel: 40 + Math.random() * 60,  // 40-100 %
-        tyrePressure: 85 + Math.random() * 25, // 85-110 bar
-        batteryHealth: 50 + Math.random() * 50, // 50-100 %
-      };
-      const mileage = Math.floor(50000 + Math.random()*150000); // 50k-200k km
-      const lastServiceDateObj = new Date(Date.now() - Math.random()*31536000000); // within last year
-      const lastServiceDate = lastServiceDateObj.toLocaleDateString();
-      const nextServiceDate = new Date(lastServiceDateObj.getTime() + 15552000000).toLocaleDateString(); // +6mo
-      const history = {
-        engineTemp: [{time: Date.now(), value: metrics.engineTemp}],
-        oilLevel: [{time: Date.now(), value: metrics.oilLevel}],
-        tyrePressure: [{time: Date.now(), value: metrics.tyrePressure}],
-        batteryHealth: [{time: Date.now(), value: metrics.batteryHealth}],
-      };
-      const warnings = {
-        engineTemp: metrics.engineTemp > 90,
-        oilLevel: metrics.oilLevel < 20,
-        tyrePressure: metrics.tyrePressure < 90,
-        batteryHealth: metrics.batteryHealth < 20,
-      };
-      return {
-        id,
-        name: `Fahrzeug ${idx + 1}`,
-        model,
-        year,
-        mileage,
-        lastServiceDate,
-        nextServiceDate,
-        metrics,
-        history,
-        warnings,
-        icon: IconComp,
-        location: {lat, lng},
-        markerIcon,
-        route,
-        routeIndex,
-        isMoving,
-        dest,
-        routeIsReal,
-      };
-    });
-    return newFleet;
-  }, []);
-
-  // Slider controlled vehicle count
-  const [vehicleCount, setVehicleCount] = useState(6); // initial vehicle count
-  const [expandedVehicles, setExpandedVehicles] = useState([]); // ids of expanded tiles
-  const [currentPage, setCurrentPage] = useState(0);
-  const vehiclesPerPage = 12;
-
-  // Regenerate fleet when vehicleCount changes (resetting timeline & notifications)
+  // when user drags "Tempo" slider
   useEffect(() => {
-    const fleet = generateVehicles(vehicleCount);
-    setVehicles(fleet);
-    prevVehiclesRef.current = fleet;
-    setTimeline([]);
-    setNotifications([]);
-    setExpandedVehicles([]);
-    setCurrentPage(0);
-  }, [vehicleCount, generateVehicles]);
-
-  const toggleExpand = (id) => {
-    setExpandedVehicles((prev) => prev.includes(id) ? prev.filter(v=>v!==id) : [...prev, id]);
-  };
-
-  // Add scroll listener effect after darkMode effect
-  useEffect(()=>{
-    const onScroll = () => {
-      setHeaderCollapsed(window.scrollY > 80);
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  },[]);
-
-  // NEW: fixed center of map (Europe)
-  const mapCenter = [51, 10];
-
-  // movement interval – advance vehicles that are on a route
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setVehicles(prev => prev.map(v => {
-        if (!v.route || v.route.length === 0) return v;
-        const nextIndex = (v.routeIndex + 1) % v.route.length;
-        return {
-          ...v,
-          routeIndex: nextIndex,
-          location: v.route[nextIndex],
-        };
-      }));
-    }, 4000 / simulationSpeed); // scaled by simulation speed
-    return () => clearInterval(iv);
+    const intervalMs = Math.round(1000 / simulationSpeed);   // e.g. 1× → 1000 ms, 2× → 500 ms, 0.5× → 2000 ms
+    fetch(`${API_BASE}/SetSimulationStepInterval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interval: intervalMs })
+    }).catch(console.error);
   }, [simulationSpeed]);
-
-  // fetch real street routes from OSRM for moving vehicles that still have synthetic routes
-  useEffect(() => {
-    vehicles.forEach((v) => {
-      if (!v.isMoving) return;
-      if (v.routeIsReal) return; // already real
-      if (!v.dest) return;
-      if (routeFetchInProgress.current.has(v.id)) return;
-
-      routeFetchInProgress.current.add(v.id);
-
-      const url = `https://router.project-osrm.org/route/v1/driving/${v.location.lng},${v.location.lat};${v.dest.lng},${v.dest.lat}?overview=full&geometries=geojson`;
-
-      fetch(url)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
-            const coords = data.routes[0].geometry.coordinates.map(([lon, lat]) => ({ lat, lng: lon }));
-            if (coords.length > 2) {
-              setVehicles((prev) =>
-                prev.map((pv) =>
-                  pv.id === v.id ? { ...pv, route: coords, routeIndex: 0, location: coords[0], routeIsReal: true } : pv
-                )
-              );
-            }
-          }
-        })
-        .catch((err) => {
-          console.error('OSRM fetch failed', err);
-        })
-        .finally(() => {
-          routeFetchInProgress.current.delete(v.id);
-        });
-    });
-  }, [vehicles]);
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} p-6`}>
@@ -782,37 +565,6 @@ const App = () => {
               <p className="text-xs opacity-60">Warnschwellen (ML-Vorhersage)</p>
             </div>
             <div className="flex gap-6 flex-wrap items-center">
-              <div className="flex items-center gap-2">
-                <label htmlFor="vehicleCount" className="text-sm whitespace-nowrap">Fahrzeuge:</label>
-                <input
-                  id="vehicleCount"
-                  type="range"
-                  min="1"
-                  max="200"
-                  list="vehicleTicks"
-                  value={vehicleCount}
-                  onChange={(e) => setVehicleCount(Number(e.target.value))}
-                  className="accent-blue-600 cursor-pointer w-40"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="200"
-                  value={vehicleCount}
-                  onChange={(e)=>{
-                    const val = Number(e.target.value);
-                    if(!isNaN(val)) setVehicleCount(Math.min(200, Math.max(1, val)));
-                  }}
-                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
-                />
-                <datalist id="vehicleTicks">
-                  <option value="1"/>
-                  <option value="50"/>
-                  <option value="100"/>
-                  <option value="150"/>
-                  <option value="200"/>
-                </datalist>
-              </div>
               {/* Simulation speed control */}
               <div className="flex items-center gap-2">
                 <label htmlFor="simSpeed" className="text-sm whitespace-nowrap">Tempo:</label>

@@ -1,0 +1,547 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/Common.xml">
+    <edmx:Include Alias="Common" Namespace="com.sap.vocabularies.Common.v1"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://oasis-tcs.github.io/odata-vocabularies/vocabularies/Org.OData.Core.V1.xml">
+    <edmx:Include Alias="Core" Namespace="Org.OData.Core.V1"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/UI.xml">
+    <edmx:Include Alias="UI" Namespace="com.sap.vocabularies.UI.v1"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="https://oasis-tcs.github.io/odata-vocabularies/vocabularies/Org.OData.Validation.V1.xml">
+    <edmx:Include Alias="Validation" Namespace="Org.OData.Validation.V1"/>
+  </edmx:Reference>
+  <edmx:DataServices>
+    <Schema Namespace="MaintainanceService" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <Annotation Term="Core.Links">
+        <Collection>
+          <Record>
+            <PropertyValue Property="rel" String="author"/>
+            <PropertyValue Property="href" String="https://cap.cloud.sap"/>
+          </Record>
+        </Collection>
+      </Annotation>
+      <EntityContainer Name="EntityContainer">
+        <EntitySet Name="Vehicles" EntityType="MaintainanceService.Vehicles">
+          <NavigationPropertyBinding Path="model" Target="VehicleModels"/>
+          <NavigationPropertyBinding Path="metrics" Target="Telemetry"/>
+          <NavigationPropertyBinding Path="predictions" Target="Predictions"/>
+          <NavigationPropertyBinding Path="activePrediction" Target="Predictions"/>
+          <NavigationPropertyBinding Path="maintenanceHistory" Target="Maintenances"/>
+          <NavigationPropertyBinding Path="routes" Target="Routes"/>
+          <NavigationPropertyBinding Path="activeRoute" Target="Routes"/>
+        </EntitySet>
+        <EntitySet Name="Telemetry" EntityType="MaintainanceService.Telemetry">
+          <NavigationPropertyBinding Path="vehicle" Target="Vehicles"/>
+          <NavigationPropertyBinding Path="sensor" Target="TelemetrySensors"/>
+        </EntitySet>
+        <EntitySet Name="Warnings" EntityType="MaintainanceService.Warnings">
+          <NavigationPropertyBinding Path="vehicle" Target="Vehicles"/>
+          <NavigationPropertyBinding Path="sensor" Target="TelemetrySensors"/>
+        </EntitySet>
+        <EntitySet Name="Predictions" EntityType="MaintainanceService.Predictions">
+          <NavigationPropertyBinding Path="vehicle" Target="Vehicles"/>
+          <NavigationPropertyBinding Path="component" Target="VehicleComponents"/>
+        </EntitySet>
+        <EntitySet Name="Maintenances" EntityType="MaintainanceService.Maintenances">
+          <NavigationPropertyBinding Path="vehicle" Target="Vehicles"/>
+          <NavigationPropertyBinding Path="component" Target="VehicleComponents"/>
+        </EntitySet>
+        <EntitySet Name="Locations" EntityType="MaintainanceService.Locations"/>
+        <EntitySet Name="Routes" EntityType="MaintainanceService.Routes">
+          <NavigationPropertyBinding Path="vehicle" Target="Vehicles"/>
+          <NavigationPropertyBinding Path="geometry" Target="RouteGeometry"/>
+        </EntitySet>
+        <EntitySet Name="TelemetrySensors" EntityType="MaintainanceService.TelemetrySensors">
+          <NavigationPropertyBinding Path="affectedComponents" Target="TelemetrySensorAffectedComponents"/>
+        </EntitySet>
+        <EntitySet Name="VehicleComponents" EntityType="MaintainanceService.VehicleComponents">
+          <NavigationPropertyBinding Path="affectedSensors" Target="TelemetrySensorAffectedComponents"/>
+        </EntitySet>
+        <EntitySet Name="TelemetrySensorAffectedComponents" EntityType="MaintainanceService.TelemetrySensorAffectedComponents">
+          <NavigationPropertyBinding Path="sensor" Target="TelemetrySensors"/>
+          <NavigationPropertyBinding Path="component" Target="VehicleComponents"/>
+        </EntitySet>
+        <EntitySet Name="VehicleModels" EntityType="MaintainanceService.VehicleModels"/>
+        <EntitySet Name="RouteGeometry" EntityType="MaintainanceService.RouteGeometry">
+          <NavigationPropertyBinding Path="route" Target="Routes"/>
+        </EntitySet>
+        <ActionImport Name="RegisterVehicle" Action="MaintainanceService.RegisterVehicle" EntitySet="Vehicles"/>
+        <ActionImport Name="SetSimulationStepInterval" Action="MaintainanceService.SetSimulationStepInterval"/>
+      </EntityContainer>
+      <EntityType Name="Vehicles">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="createdBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="modifiedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="modifiedBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="name" Type="Edm.String"/>
+        <NavigationProperty Name="model" Type="MaintainanceService.VehicleModels">
+          <ReferentialConstraint Property="model_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="model_ID" Type="Edm.Guid"/>
+        <Property Name="year" Type="Edm.Int32"/>
+        <Property Name="mileage" Type="Edm.Int32"/>
+        <Property Name="lastServiceDate" Type="Edm.Date"/>
+        <Property Name="nextServiceDate" Type="Edm.Date"/>
+        <Property Name="latitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="longitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="isMoving" Type="Edm.Boolean" DefaultValue="false"/>
+        <Property Name="destinationLatitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="destinationLongitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="originLatitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="originLongitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="activeRouteIndex" Type="Edm.Int32"/>
+        <NavigationProperty Name="metrics" Type="Collection(MaintainanceService.Telemetry)" Partner="vehicle">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+        <NavigationProperty Name="predictions" Type="Collection(MaintainanceService.Predictions)" Partner="vehicle">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+        <NavigationProperty Name="activePrediction" Type="MaintainanceService.Predictions">
+          <ReferentialConstraint Property="activePrediction_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="activePrediction_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="maintenanceHistory" Type="Collection(MaintainanceService.Maintenances)" Partner="vehicle">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+        <NavigationProperty Name="routes" Type="Collection(MaintainanceService.Routes)" Partner="vehicle">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+        <NavigationProperty Name="activeRoute" Type="MaintainanceService.Routes">
+          <ReferentialConstraint Property="activeRoute_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="activeRoute_ID" Type="Edm.Guid"/>
+        <Property Name="model_name" Type="Edm.String" MaxLength="60"/>
+      </EntityType>
+      <EntityType Name="Telemetry">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="createdBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="modifiedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="modifiedBy" Type="Edm.String" MaxLength="255"/>
+        <NavigationProperty Name="vehicle" Type="MaintainanceService.Vehicles" Partner="metrics">
+          <ReferentialConstraint Property="vehicle_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="vehicle_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="sensor" Type="MaintainanceService.TelemetrySensors">
+          <ReferentialConstraint Property="sensor_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="sensor_ID" Type="Edm.Guid"/>
+        <Property Name="value" Type="Edm.Decimal" Precision="9" Scale="3"/>
+      </EntityType>
+      <EntityType Name="Warnings">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="createdBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="modifiedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="modifiedBy" Type="Edm.String" MaxLength="255"/>
+        <NavigationProperty Name="vehicle" Type="MaintainanceService.Vehicles">
+          <ReferentialConstraint Property="vehicle_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="vehicle_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="sensor" Type="MaintainanceService.TelemetrySensors">
+          <ReferentialConstraint Property="sensor_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="sensor_ID" Type="Edm.Guid"/>
+        <Property Name="value" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="triggeredAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="cleared" Type="Edm.Boolean" DefaultValue="false"/>
+      </EntityType>
+      <EntityType Name="Predictions">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="createdBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="modifiedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="modifiedBy" Type="Edm.String" MaxLength="255"/>
+        <NavigationProperty Name="vehicle" Type="MaintainanceService.Vehicles" Partner="predictions">
+          <ReferentialConstraint Property="vehicle_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="vehicle_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="component" Type="MaintainanceService.VehicleComponents">
+          <ReferentialConstraint Property="component_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="component_ID" Type="Edm.Guid"/>
+        <Property Name="recommendedMaintenanceAt" Type="Edm.DateTimeOffset"/>
+        <Property Name="latestMaintenanceAt" Type="Edm.DateTimeOffset"/>
+        <Property Name="recommendedMaintainanceConfidence" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="latestMaintainanceConfidence" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="priority" Type="Edm.String"/>
+        <Property Name="reason" Type="Edm.String"/>
+        <Property Name="description" Type="Edm.String"/>
+      </EntityType>
+      <EntityType Name="Maintenances">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="createdBy" Type="Edm.String" MaxLength="255"/>
+        <Property Name="modifiedAt" Type="Edm.DateTimeOffset" Precision="7"/>
+        <Property Name="modifiedBy" Type="Edm.String" MaxLength="255"/>
+        <NavigationProperty Name="vehicle" Type="MaintainanceService.Vehicles" Partner="maintenanceHistory">
+          <ReferentialConstraint Property="vehicle_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="vehicle_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="component" Type="MaintainanceService.VehicleComponents">
+          <ReferentialConstraint Property="component_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="component_ID" Type="Edm.Guid"/>
+        <Property Name="planned" Type="Edm.Boolean"/>
+        <Property Name="status" Type="Edm.String"/>
+        <Property Name="cost" Type="Edm.Decimal" Precision="15" Scale="2"/>
+        <Property Name="duration" Type="Edm.Decimal" Precision="5" Scale="2"/>
+        <Property Name="description" Type="Edm.String"/>
+        <Property Name="performedOn" Type="Edm.Date"/>
+      </EntityType>
+      <EntityType Name="Locations">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="address" Type="Edm.String"/>
+        <Property Name="latitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="longitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="population" Type="Edm.Int32"/>
+      </EntityType>
+      <EntityType Name="Routes">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <NavigationProperty Name="vehicle" Type="MaintainanceService.Vehicles" Partner="routes">
+          <ReferentialConstraint Property="vehicle_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="vehicle_ID" Type="Edm.Guid"/>
+        <Property Name="distance" Type="Edm.Decimal" Precision="12" Scale="3"/>
+        <Property Name="duration" Type="Edm.Decimal" Precision="12" Scale="3"/>
+        <NavigationProperty Name="geometry" Type="MaintainanceService.RouteGeometry">
+          <OnDelete Action="Cascade"/>
+          <ReferentialConstraint Property="geometry_route_ID" ReferencedProperty="route_ID"/>
+        </NavigationProperty>
+        <Property Name="geometry_route_ID" Type="Edm.Guid"/>
+        <Property Name="weight" Type="Edm.Decimal" Precision="12" Scale="3"/>
+        <Property Name="weight_name" Type="Edm.String" MaxLength="10"/>
+      </EntityType>
+      <EntityType Name="TelemetrySensors">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="name" Type="Edm.String"/>
+        <Property Name="unit" Type="Edm.String"/>
+        <Property Name="min" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="max" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="reference" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="description" Type="Edm.String"/>
+        <Property Name="warnLow" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="warnHigh" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="criticalLow" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <Property Name="criticalHigh" Type="Edm.Decimal" Precision="9" Scale="3"/>
+        <NavigationProperty Name="affectedComponents" Type="Collection(MaintainanceService.TelemetrySensorAffectedComponents)" Partner="sensor">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+      </EntityType>
+      <EntityType Name="VehicleComponents">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <NavigationProperty Name="affectedSensors" Type="Collection(MaintainanceService.TelemetrySensorAffectedComponents)" Partner="component">
+          <OnDelete Action="Cascade"/>
+        </NavigationProperty>
+        <Property Name="name" Type="Edm.String"/>
+        <Property Name="description" Type="Edm.String"/>
+      </EntityType>
+      <EntityType Name="TelemetrySensorAffectedComponents">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <NavigationProperty Name="sensor" Type="MaintainanceService.TelemetrySensors" Partner="affectedComponents">
+          <ReferentialConstraint Property="sensor_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="sensor_ID" Type="Edm.Guid"/>
+        <NavigationProperty Name="component" Type="MaintainanceService.VehicleComponents" Partner="affectedSensors">
+          <ReferentialConstraint Property="component_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="component_ID" Type="Edm.Guid"/>
+      </EntityType>
+      <EntityType Name="VehicleModels">
+        <Key>
+          <PropertyRef Name="ID"/>
+        </Key>
+        <Property Name="ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="name" Type="Edm.String" MaxLength="60"/>
+      </EntityType>
+      <EntityType Name="RouteGeometry">
+        <Key>
+          <PropertyRef Name="route_ID"/>
+        </Key>
+        <NavigationProperty Name="route" Type="MaintainanceService.Routes">
+          <ReferentialConstraint Property="route_ID" ReferencedProperty="ID"/>
+        </NavigationProperty>
+        <Property Name="route_ID" Type="Edm.Guid" Nullable="false"/>
+        <Property Name="type" Type="Edm.String" MaxLength="10"/>
+        <Property Name="coordinatesCount" Type="Edm.Int32"/>
+        <Property Name="coordinates" Type="Collection(MaintainanceService.RouteGeometry_coordinates)" Nullable="true"/>
+      </EntityType>
+      <ComplexType Name="RouteGeometry_coordinates">
+        <Property Name="index" Type="Edm.Int32"/>
+        <Property Name="latitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Property Name="longitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+      </ComplexType>
+      <Action Name="CreateRoute" IsBound="true">
+        <Parameter Name="in" Type="MaintainanceService.Vehicles"/>
+        <Parameter Name="destinationLocation_ID" Type="Edm.Guid"/>
+        <ReturnType Type="MaintainanceService.Routes"/>
+      </Action>
+      <Action Name="MeasureAllTelemetry" IsBound="true">
+        <Parameter Name="in" Type="MaintainanceService.Vehicles"/>
+        <ReturnType Type="Collection(MaintainanceService.Telemetry)"/>
+      </Action>
+      <Action Name="CreatePrediction" IsBound="true">
+        <Parameter Name="in" Type="MaintainanceService.Vehicles"/>
+        <ReturnType Type="MaintainanceService.Predictions"/>
+      </Action>
+      <Action Name="RegisterVehicle" IsBound="false">
+        <Parameter Name="name" Type="Edm.String"/>
+        <Parameter Name="latitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <Parameter Name="longitude" Type="Edm.Decimal" Precision="9" Scale="6"/>
+        <ReturnType Type="MaintainanceService.Vehicles"/>
+      </Action>
+      <Action Name="SetSimulationStepInterval" IsBound="false">
+        <Parameter Name="interval" Type="Edm.Int32"/>
+      </Action>
+      <Annotations Target="MaintainanceService.EntityContainer">
+        <Annotation Term="Common.WebSocketBaseURL" String="ws/WebSocketService"/>
+        <Annotation Term="Common.WebSocketChannel" Qualifier="sideEffects" String="VehicleChanged"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Vehicles/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Vehicles/createdAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Created On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Vehicles/createdBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Created By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Vehicles/modifiedAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Changed On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Vehicles/modifiedBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Changed By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Telemetry/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Telemetry/createdAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Created On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Telemetry/createdBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Created By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Telemetry/modifiedAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Changed On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Telemetry/modifiedBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Changed By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Warnings/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Warnings/createdAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Created On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Warnings/createdBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Created By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Warnings/modifiedAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Changed On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Warnings/modifiedBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Changed By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/createdAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Created On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/createdBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Created By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/modifiedAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Changed On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/modifiedBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Changed By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Predictions/priority">
+        <Annotation Term="Validation.AllowedValues">
+          <Collection>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="High"/>
+              <PropertyValue Property="Value" String="High"/>
+            </Record>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="Medium"/>
+              <PropertyValue Property="Value" String="Medium"/>
+            </Record>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="Low"/>
+              <PropertyValue Property="Value" String="Low"/>
+            </Record>
+          </Collection>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/createdAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Created On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/createdBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Immutable" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Created By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/modifiedAt">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Common.Label" String="Changed On"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/modifiedBy">
+        <Annotation Term="UI.HiddenFilter" Bool="true"/>
+        <Annotation Term="UI.ExcludeFromNavigationContext" Bool="true"/>
+        <Annotation Term="Core.Computed" Bool="true"/>
+        <Annotation Term="Core.Description" String="User's unique ID"/>
+        <Annotation Term="Common.Label" String="Changed By"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Maintenances/status">
+        <Annotation Term="Validation.AllowedValues">
+          <Collection>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="Open"/>
+              <PropertyValue Property="Value" String="Open"/>
+            </Record>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="InProgress"/>
+              <PropertyValue Property="Value" String="InProgress"/>
+            </Record>
+            <Record Type="Validation.AllowedValue">
+              <Annotation Term="Core.SymbolicName" String="Completed"/>
+              <PropertyValue Property="Value" String="Completed"/>
+            </Record>
+          </Collection>
+        </Annotation>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Locations/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.Routes/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.TelemetrySensors/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.VehicleComponents/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.TelemetrySensorAffectedComponents/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.VehicleModels/ID">
+        <Annotation Term="Core.ComputedDefaultValue" Bool="true"/>
+      </Annotations>
+      <Annotations Target="MaintainanceService.SetSimulationStepInterval()/interval">
+        <Annotation Term="Common.FieldControl" EnumMember="Common.FieldControlType/Mandatory"/>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

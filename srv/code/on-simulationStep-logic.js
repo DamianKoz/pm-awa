@@ -1,4 +1,3 @@
-
 /**
  * 
  * @ON(event = { "simulationStep" })
@@ -26,7 +25,7 @@ module.exports = async function (req) {
 			}
 			await MaintainanceService.MeasureAllTelemetry('Vehicles', vehicle.ID)
 			await MaintainanceService.CreatePrediction('Vehicles', vehicle.ID)
-			webSocketLOG.info(`Emitting ${eventName} event for Vehicle: ${vehicle.ID}`)
+			// webSocketLOG.info(`Emitting ${eventName} event for Vehicle: ${vehicle.ID}`)
 			WebSocketService.emit(eventName, {
 				ID: vehicle.ID,
 				serverAction: 'RaiseSideEffect',
