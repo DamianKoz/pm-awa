@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useCallback, useRef} from "react";
+import { createPortal } from 'react-dom';
 import {
   LineChart,
   Line,
@@ -34,6 +35,7 @@ import {
   Bus,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { useRef as useRefReact } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -415,7 +417,6 @@ const App = () => {
     prevVehiclesRef.current = fleet;
     setTimeline([]);
     setNotifications([]);
-    setExpandedVehicles([]);
     setCurrentPage(0);
   };
 
@@ -474,6 +475,33 @@ const App = () => {
       color: cfg.color,
     };
   });
+
+  // ---------------- KPI CALCULATIONS ----------------
+  const totalPredictions = fleetPredictions.length;
+  const criticalPredictions = fleetPredictions.filter(p => p.priority === 'Hoch').length;
+
+  const totalMaintenanceCost = maintenanceHistory.reduce((sum, e) => sum + e.cost, 0);
+  const totalMaintenanceCostFormatted = totalMaintenanceCost.toLocaleString('de-DE');
+
+  // Savings KPIs
+  const costMultiplier = 4;
+  const realizedSavings = maintenanceHistory.filter(e=>e.planned).reduce((sum,e)=> sum + (e.cost*costMultiplier) * 1.8, 0);
+  const potentialSavings = maintenanceHistory.filter(e=>!e.planned).reduce((sum,e)=> sum + (e.cost*costMultiplier) * 0.5, 0);
+  const realizedSavingsFmt = Math.round(realizedSavings).toLocaleString('de-DE');
+  const potentialSavingsFmt = Math.round(potentialSavings).toLocaleString('de-DE');
+
+  // vehiclesInDanger definition
+  const criticalPredicate = v => {
+    const hasHighPred = fleetPredictions.some(p => p.vehicleId === v.id && p.priority === 'Hoch');
+    const hasWarning = Object.values(v.warnings).some(Boolean);
+    return hasHighPred || hasWarning;
+  };
+  const dangerPredicate = v => v.route && fleetPredictions.some(p => p.vehicleId === v.id && p.priority === 'Hoch');
+
+  const tilesCriticalCount = vehicles.filter(criticalPredicate).length; // red border tiles
+  const routesInDangerCount = vehicles.filter(dangerPredicate).length;  // red routes
+
+  const totalVehicles = vehicles.length;
 
   // define major inland city hubs for plausible vehicle positions
   const cityHubs = [
@@ -563,13 +591,22 @@ const App = () => {
       let dest = null;
       let routeIsReal = false;
       if (isMoving) {
-        // choose destination hub different from start
+        // pick a destination hub that is significantly distant to get longer routes
+        let attempts = 0;
         do {
           dest = cityHubs[Math.floor(Math.random() * cityHubs.length)];
-        } while (dest === hub);
-        // initial synthetic fallback route (will be replaced once real route fetched)
-        route = generateRoute(hub, dest);
-        routeIndex = 0;
+          attempts++;
+        } while ((dest === hub || Math.hypot(dest.lat - hub.lat, dest.lng - hub.lng) < 5) && attempts < 30);
+
+        // create a more granular route – number of points scales with straight-line distance
+        const straightDist = Math.hypot(dest.lat - hub.lat, dest.lng - hub.lng);
+        const steps = Math.max(120, Math.floor(straightDist * 80));
+        route = generateRoute(hub, dest, steps);
+        // Start the vehicle already some distance along the route (approx. 10-90 %)
+        routeIndex = Math.floor(route.length * (0.1 + Math.random() * 0.8));
+        // move its current position to that point on the route
+        lat = route[routeIndex].lat;
+        lng = route[routeIndex].lng;
         routeIsReal = false;
       }
       // build a custom Leaflet SVG icon using the same Lucide icon used in the list
@@ -580,12 +617,22 @@ const App = () => {
         iconSize: [24, 24],
         iconAnchor: [12, 12],
       });
-      const metrics = {
-        engineTemp: 65 + Math.random() * 30, // 65-95 °C
-        oilLevel: 40 + Math.random() * 60,  // 40-100 %
-        tyrePressure: 85 + Math.random() * 25, // 85-110 bar
-        batteryHealth: 50 + Math.random() * 50, // 50-100 %
-      };
+      // Roughly 20% of the fleet should start in a critical state so that
+      // their routes become rot-markiert (red) immediately.
+      const isRisky = Math.random() < 0.2;
+      const metrics = isRisky ?
+        {
+          // deliberately outside normal operating ranges -> High-priority prediction
+          engineTemp: 96 + Math.random() * 4,      // ≥96 °C
+          oilLevel: 5 + Math.random() * 15,        // 5-20 %
+          tyrePressure: 70 + Math.random() * 10,   // 70-80 bar
+          batteryHealth: 5 + Math.random() * 15,   // 5-20 %
+        } : {
+          engineTemp: 65 + Math.random() * 30,     // 65-95 °C
+          oilLevel: 40 + Math.random() * 60,       // 40-100 %
+          tyrePressure: 85 + Math.random() * 25,   // 85-110 bar
+          batteryHealth: 50 + Math.random() * 50,  // 50-100 %
+        };
       const mileage = Math.floor(50000 + Math.random()*150000); // 50k-200k km
       const lastServiceDateObj = new Date(Date.now() - Math.random()*31536000000); // within last year
       const lastServiceDate = lastServiceDateObj.toLocaleDateString();
@@ -602,9 +649,15 @@ const App = () => {
         tyrePressure: metrics.tyrePressure < 90,
         batteryHealth: metrics.batteryHealth < 20,
       };
+      // simple German style license plate based on hub code
+      const cityCode = hub.name.slice(0,2).toUpperCase();
+      const letters = String.fromCharCode(65+Math.floor(Math.random()*26)) + String.fromCharCode(65+Math.floor(Math.random()*26));
+      const digits = Math.floor(100 + Math.random()*900); // 3 digits
+      const licensePlate = `${cityCode}-${letters} ${digits}`;
+
       return {
         id,
-        name: `Fahrzeug ${idx + 1}`,
+        name: licensePlate,
         model,
         year,
         mileage,
@@ -628,9 +681,11 @@ const App = () => {
 
   // Slider controlled vehicle count
   const [vehicleCount, setVehicleCount] = useState(6); // initial vehicle count
-  const [expandedVehicles, setExpandedVehicles] = useState([]); // ids of expanded tiles
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [showDangerOnly, setShowDangerOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const vehiclesPerPage = 12;
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
 
   // Regenerate fleet when vehicleCount changes (resetting timeline & notifications)
   useEffect(() => {
@@ -639,25 +694,60 @@ const App = () => {
     prevVehiclesRef.current = fleet;
     setTimeline([]);
     setNotifications([]);
-    setExpandedVehicles([]);
     setCurrentPage(0);
   }, [vehicleCount, generateVehicles]);
 
-  const toggleExpand = (id) => {
-    setExpandedVehicles((prev) => prev.includes(id) ? prev.filter(v=>v!==id) : [...prev, id]);
+  const openVehicleModal = (vehicle) => {
+    setSelectedVehicle(vehicle);
+    document.body.classList.add('modal-open');
   };
+  const closeVehicleModal = () => {
+    setSelectedVehicle(null);
+    document.body.classList.remove('modal-open');
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if(e.key==='Escape') closeVehicleModal();
+    };
+    if(selectedVehicle){
+      window.addEventListener('keydown', onKey);
+    }
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedVehicle]);
 
   // Add scroll listener effect after darkMode effect
   useEffect(()=>{
-    const onScroll = () => {
-      setHeaderCollapsed(window.scrollY > 80);
+    const collapseThreshold = 160; // collapse when above this
+    const expandThreshold = 80;   // expand when below this
+    let lastY = window.scrollY;
+    const onScrollCheck = () => {
+      const y = window.scrollY;
+      const scrollingDown = y > lastY;
+      lastY = y;
+      setHeaderCollapsed(prev => {
+        if (!scrollingDown && y < expandThreshold) return false; // expand when scrolling up enough
+        if (scrollingDown && y > collapseThreshold) return true; // collapse when scrolling down past threshold
+        return prev; // no change
+      });
     };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          onScrollCheck();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   },[]);
 
   // NEW: fixed center of map (Europe)
   const mapCenter = [51, 10];
+  const mapRef = useRef(null);
 
   // movement interval – advance vehicles that are on a route
   useEffect(() => {
@@ -695,7 +785,12 @@ const App = () => {
             if (coords.length > 2) {
               setVehicles((prev) =>
                 prev.map((pv) =>
-                  pv.id === v.id ? { ...pv, route: coords, routeIndex: 0, location: coords[0], routeIsReal: true } : pv
+                  pv.id === v.id ? (() => {
+                    // Preserve progress along the old synthetic route
+                    const ratio = pv.route && pv.route.length > 0 ? pv.routeIndex / pv.route.length : 0;
+                    const newIdx = Math.min(coords.length - 1, Math.floor(coords.length * ratio));
+                    return { ...pv, route: coords, routeIndex: newIdx, location: coords[newIdx], routeIsReal: true };
+                  })() : pv
                 )
               );
             }
@@ -710,31 +805,46 @@ const App = () => {
     });
   }, [vehicles]);
 
+  const vehiclesForMap = showDangerOnly ? vehicles.filter(dangerPredicate) : vehicles;
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} p-6`}>
       <div className="mx-auto">
         {/* Header */}
-        <header className={`sticky top-0 z-40 mb-12 transition-all duration-300 ${headerCollapsed?'backdrop-blur bg-indigo-700/90':'bg-transparent'}`} style={{overflow:'visible'}}>
-          <div className={`relative overflow-visible rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 transition-all duration-300 text-white shadow-xl ${headerCollapsed?'p-4':'p-8'}`}>
-            <div className="absolute inset-0 bg-grid-white/10" />
+        <header className={`sticky top-0 z-40 mb-4 transition-all duration-300 ${headerCollapsed?'backdrop-blur bg-indigo-700/90':'bg-transparent'}`} style={{overflow:'visible'}}>
+          <div className={`relative overflow-visible rounded-2xl transition-all duration-300 text-white shadow-xl ${headerCollapsed?'p-2':'p-6'}`} style={{background:'linear-gradient(90deg, rgb(0 198 178) 0%, rgb(0 150 135) 100%)'}}>
             <div className="relative">
               <div className="flex justify-between items-center">
                 <div>
-                  <h1 className={`font-bold tracking-tight transition-all duration-300 ${headerCollapsed?'text-xl':'text-4xl mb-3'}`}>
-                    Predictive Maintenance Dashboard
-                  </h1>
-                  {!headerCollapsed && (
-                    <p className="text-blue-100 text-lg">
-                      Echtzeitüberwachung und Ausfallvorhersage für Industrieanlagen
-                    </p>) }
+                  <div className="flex items-center gap-3">
+                    <img src="/FOM_2023small.png" alt="FOM" className="w-auto" style={{height: headerCollapsed ? '2.5rem' : '5rem'}} />
+                    <div className="flex flex-col">
+                      <h1 className={`font-bold tracking-tight transition-all duration-300 ${headerCollapsed?'text-xl':'text-4xl mb-1'}`}>Predictive Maintenance Dashboard</h1>
+                      {!headerCollapsed && (
+                        <p className="text-blue-100 text-sm lg:text-lg">Echtzeitüberwachung und Ausfallvorhersage für Fahrzeugflotten</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
+                  {/* KPI badges */}
+                  <div className="hidden sm:flex gap-2 mr-2">
+                    <span className={`bg-white/20 text-white/90 rounded ${headerCollapsed? 'text-xs px-2 py-0.5':'text-sm px-3 py-1'}`}>
+                      {totalVehicles}&nbsp;Fahrzeuge
+                    </span>
+                    <span className={`bg-red-600/20 text-red-200 rounded ${headerCollapsed? 'text-xs px-2 py-0.5':'text-sm px-3 py-1'}`}>
+                      {tilesCriticalCount}&nbsp;kritisch
+                    </span>
+                    <span className={`bg-green-500/20 text-green-200 rounded ${headerCollapsed? 'text-xs px-2 py-0.5':'text-sm px-3 py-1'}`}>
+                      {realizedSavingsFmt}€ gespart
+                    </span>
+                  </div>
+                  {/* <button
                     onClick={() => setDarkMode(!darkMode)}
                     className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                   >
                     {darkMode ? <Sun className="text-yellow-300" /> : <Moon className="text-blue-100" />}
-                  </button>
+                  </button> */}
                   {/* Bell */}
                   <div className="relative">
                     <button onClick={()=>setShowInbox(s=>!s)} className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
@@ -772,123 +882,16 @@ const App = () => {
           </div>
         </header>
 
-        {/* Control Panel */}
-        <div className={`rounded-xl shadow-lg p-6 mb-8 transition-colors duration-300 ${
-          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
-        }`}>
-          <div className="flex justify-between items-start mb-4 flex-wrap gap-4">
-            <div>
-              <h2 className="text-xl font-semibold mb-1">Steuerung</h2>
-              <p className="text-xs opacity-60">Warnschwellen (ML-Vorhersage)</p>
-            </div>
-            <div className="flex gap-6 flex-wrap items-center">
-              <div className="flex items-center gap-2">
-                <label htmlFor="vehicleCount" className="text-sm whitespace-nowrap">Fahrzeuge:</label>
-                <input
-                  id="vehicleCount"
-                  type="range"
-                  min="1"
-                  max="200"
-                  list="vehicleTicks"
-                  value={vehicleCount}
-                  onChange={(e) => setVehicleCount(Number(e.target.value))}
-                  className="accent-blue-600 cursor-pointer w-40"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="200"
-                  value={vehicleCount}
-                  onChange={(e)=>{
-                    const val = Number(e.target.value);
-                    if(!isNaN(val)) setVehicleCount(Math.min(200, Math.max(1, val)));
-                  }}
-                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
-                />
-                <datalist id="vehicleTicks">
-                  <option value="1"/>
-                  <option value="50"/>
-                  <option value="100"/>
-                  <option value="150"/>
-                  <option value="200"/>
-                </datalist>
-              </div>
-              {/* Simulation speed control */}
-              <div className="flex items-center gap-2">
-                <label htmlFor="simSpeed" className="text-sm whitespace-nowrap">Tempo:</label>
-                <input
-                  id="simSpeed"
-                  type="range"
-                  min="0.25"
-                  max="10"
-                  step="0.25"
-                  list="speedTicks"
-                  value={simulationSpeed}
-                  onChange={(e) => setSimulationSpeed(Number(e.target.value))}
-                  className="accent-blue-600 cursor-pointer w-40"
-                />
-                <input
-                  type="number"
-                  min="0.25"
-                  max="10"
-                  step="0.25"
-                  value={simulationSpeed}
-                  onChange={(e)=>{
-                    const val = parseFloat(e.target.value);
-                    if(!isNaN(val)) setSimulationSpeed(Math.min(10, Math.max(0.25, val)));
-                  }}
-                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
-                />
-                <span className="text-sm">x</span>
-                <datalist id="speedTicks">
-                  <option value="0.25"/>
-                  <option value="0.5"/>
-                  <option value="1"/>
-                  <option value="2"/>
-                  <option value="4"/>
-                  <option value="6"/>
-                  <option value="8"/>
-                  <option value="10"/>
-                </datalist>
-              </div>
-              <button
-                onClick={resetVehicles}
-                className="px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all transform hover:scale-105 shadow-md"
-              >
-                <RefreshCw size={16} className="inline mr-2" />
-                Reset
-              </button>
-            </div>
-          </div>
-
-          {/* Threshold chips with mock distribution tooltip */}
-          <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 select-none">
-              <FlaskConical size={12}/> ML&nbsp;Thresholds
-            </span>
-            {[
-              {label:'Temp > 90°C', bg:'#fee2e2', fg:'#b91c1c', mean:75, sd:7, unit:'°C'},
-              {label:'Öl < 20%', bg:'#fef9c3', fg:'#92400e', mean:65, sd:15, unit:'%'},
-              {label:'Druck < 90 bar', bg:'#dbeafe', fg:'#1e40af', mean:110, sd:10, unit:'bar'},
-              {label:'Batterie < 20%', bg:'#ede9fe', fg:'#5b21b6', mean:60, sd:20, unit:'%'}
-            ].map((t,i)=>(
-              <span key={i} style={{backgroundColor:t.bg,color:t.fg}} className="relative group px-2 py-1 rounded-full select-none text-[11px] cursor-default">
-                {t.label}
-              </span>
-            ))}
-          </div>
-        </div>
-
         {/* Sensors Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 mb-8">
           {vehicles.slice(currentPage*vehiclesPerPage, (currentPage+1)*vehiclesPerPage).map((vehicle) => {
-            const isExpanded = expandedVehicles.includes(vehicle.id);
+            const isExpanded = false; // modal replaces inline expansion
             const vehiclePreds = fleetPredictions.filter(p=>p.vehicleId===vehicle.id);
             return (
               <div
                 key={vehicle.id}
-                onClick={()=>toggleExpand(vehicle.id)}
-                className={`rounded-xl shadow-lg ${isExpanded? 'p-6' : 'p-4'} transition-all duration-300 transform hover:scale-[1.02] cursor-pointer ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}
+                onClick={()=>openVehicleModal(vehicle)}
+                className={`rounded-xl shadow-lg border ${isExpanded? 'p-6' : 'p-4'} transition-all duration-300 transform hover:scale-[1.02] cursor-pointer ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'} ${(() => { const critical = vehiclePreds.some(p=>p.priority==='Hoch') || Object.values(vehicle.warnings).some(Boolean); return critical && !isExpanded ? 'border-red-500 ring-2 ring-red-500 bg-red-50/40 dark:bg-red-500/10' : 'border-transparent'; })()}`}
               >
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center">
@@ -898,69 +901,9 @@ const App = () => {
                       <p className={`text-[10px] ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{vehicle.model} · {vehicle.year}</p>
                     </div>
                   </div>
-                  <span className="text-xs opacity-70">{isExpanded ? '▼' : '▲'}</span>
                 </div>
 
-                {isExpanded ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      {Object.entries(vehicle.metrics).map(([metricKey, value]) => {
-                        const cfg = vehicleConfigs[metricKey];
-                        const percentage = Math.min((value / cfg.max) * 100, 100);
-                        return (
-                          <div key={metricKey} className="flex flex-col items-center">
-                            <span className="text-xl mb-1">{cfg.icon}</span>
-                            <div className="relative w-20 h-20 mb-1">
-                              <div className="absolute inset-0 rounded-full" style={{background:`conic-gradient(${cfg.color} ${percentage}%, ${darkMode? '#2d3748':'#e5e7eb'} ${percentage}%)`}} />
-                              <div className={`absolute inset-1 rounded-full flex flex-col items-center justify-center ${darkMode? 'bg-gray-900':'bg-white'}`}>
-                                <span className="text-sm font-bold" style={{color:cfg.color}}>{value.toFixed(1)}</span>
-                                <span className="text-[10px]" style={{color: darkMode? '#9ca3af':'#6b7280'}}>{cfg.unit}</span>
-                              </div>
-                            </div>
-                            <span className={`text-xs font-medium ${vehicle.warnings[metricKey] ? 'text-red-500':'text-green-500'}`}>{vehicle.warnings[metricKey]? 'Warnung':'OK'}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 text-xs space-y-1">
-                       <p><strong>Kilometerstand:</strong> {vehicle.mileage.toLocaleString()} km</p>
-                       <p><strong>Letzte Wartung:</strong> {vehicle.lastServiceDate}</p>
-                       <p><strong>Nächste Wartung:</strong> {vehicle.nextServiceDate}</p>
-                     </div>
-
-                    {vehiclePreds.length>0 && (
-                       <div className="mt-3 space-y-1">
-                         <h4 className="text-xs font-semibold">Offene Prognosen</h4>
-                         {vehiclePreds.map((p,i)=>(
-                           <div key={i} className="text-xs space-y-1">
-                             <div className="flex justify-between items-center">
-                               <span>{p.component}</span>
-                               <div className="flex gap-1">
-                                 <span className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1 py-0.5 rounded text-[8px]">
-                                   {p.recommendedMaintenanceDays}d
-                                 </span>
-                                 <span className="bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-1 py-0.5 rounded text-[8px]">
-                                   {p.daysUntil}d
-                                 </span>
-                               </div>
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                    )}
-
-                    {vehicle.history.engineTemp.length > 0 && (
-                      <div className="mt-2 h-20 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={formatChartData(vehicle.id,'engineTemp')}>
-                            <Line type="monotone" dataKey="value" stroke="#ef4444" strokeWidth={2} dot={false} animationDuration={1500}/>
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex justify-between mt-2">
+                <div className="flex justify-between mt-2">
                     {Object.entries(vehicle.metrics).map(([metricKey,value])=>{
                       const cfg = vehicleConfigs[metricKey];
                       const percentage=Math.min((value/cfg.max)*100,100);
@@ -977,7 +920,7 @@ const App = () => {
                       );
                     })}
                   </div>
-                )}
+                
               </div>
             );
           })}
@@ -998,14 +941,20 @@ const App = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Predictions */}
-          <div className={`rounded-xl shadow-lg p-6 transition-colors duration-300 ${
+          <div className={`rounded-xl shadow-lg p-3 transition-colors duration-300 ${
             darkMode ? 'bg-gray-800 text-white' : 'bg-white'
           }`}>
-            <h2 className="text-xl font-semibold mb-4 flex items-center dark:text-white">
+            <h2 className="text-xl font-semibold mb-2 flex items-center dark:text-white">
               <Activity className="mr-2" />
               Ausfallvorhersagen
+              <span className="ml-3 text-sm font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300 px-2 py-0.5 rounded hidden sm:inline">
+                {criticalPredictions}&nbsp;kritisch
+              </span>
+              <span className="ml-2 text-sm font-medium bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 px-2 py-0.5 rounded hidden sm:inline">
+                {totalPredictions}&nbsp;gesamt
+              </span>
             </h2>
-            <div className="text-xs opacity-70 mb-4">Vorhersagen je Fahrzeug (ML-basiert)</div>
+            <div className="text-xs opacity-60 mb-4">Vorhersagen je Fahrzeug (ML-basiert)</div>
             {fleetPredictions.length === 0 ? (
               <div className="text-center py-12">
                 <CheckCircle
@@ -1021,7 +970,7 @@ const App = () => {
                 {fleetPredictions.map((prediction, index) => (
                   <div
                     key={index}
-                    className={`border-l-4 pl-3 py-3 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] ${
+                    className={`border-l-4 px-4 py-3 rounded-r-lg transition-all duration-300 transform hover:scale-[1.02] ${
                       prediction.priority === "Hoch"
                         ? "border-red-500 bg-red-50/90 dark:border-red-400 dark:bg-red-500/10"
                         : prediction.priority === "Mittel"
@@ -1029,7 +978,7 @@ const App = () => {
                         : "border-blue-500 bg-blue-50/90 dark:border-blue-400 dark:bg-blue-500/10"
                     }`}
                   >
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <h3 className="font-semibold dark:text-gray-100 flex items-center gap-2 text-base">
                           {React.createElement(vehicles.find(v=>v.id===prediction.vehicleId)?.icon || Truck,{size:14, className: "dark:text-gray-300"})}
@@ -1040,9 +989,9 @@ const App = () => {
                         </p>
                       </div>
                       <div className="text-right ml-3">
-                        <div className="flex gap-2 items-center">
+                        <div className="flex gap-2 items-center w-full">
                           {/* Recommended Maintenance Date */}
-                          <div className="bg-green-100 dark:bg-green-500/10 rounded px-2 py-1">
+                          <div className="flex-1 bg-green-100 dark:bg-green-500/10 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-green-700 dark:text-green-400 font-medium">
                               Empfohlen
                             </div>
@@ -1052,7 +1001,7 @@ const App = () => {
                           </div>
                           
                           {/* Predicted Failure Date */}
-                          <div className="bg-red-100 dark:bg-red-500/10 rounded px-2 py-1">
+                          <div className="flex-1 bg-red-100 dark:bg-red-500/10 rounded px-2 py-1 text-center">
                             <div className="text-[10px] text-red-700 dark:text-red-400 font-medium">
                               Ausfall
                             </div>
@@ -1061,7 +1010,7 @@ const App = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-3 mt-1">
                           <div
                             className={`text-[10px] px-2 py-0.5 rounded-full ${
                               prediction.priority === "Hoch"
@@ -1074,7 +1023,7 @@ const App = () => {
                             {prediction.priority}
                           </div>
                           <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                            {prediction.confidence}%
+                            Confidence: {prediction.confidence}%
                           </div>
                         </div>
                       </div>
@@ -1089,7 +1038,15 @@ const App = () => {
           <div className={`rounded-xl shadow-lg p-6 transition-colors duration-300 ${
             darkMode ? 'bg-gray-800 text-white' : 'bg-white'
           }`}>
-            <h2 className="text-xl font-semibold mb-6">Wartungshistorie</h2>
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              Wartungshistorie
+              <span className="ml-3 text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 rounded hidden sm:inline">
+                {realizedSavingsFmt}€&nbsp;gespart
+              </span>
+              <span className="ml-2 text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-0.5 rounded hidden sm:inline">
+                {potentialSavingsFmt}€&nbsp;weiteres Einsparpotenzial
+              </span>
+            </h2>
             <div className="space-y-4 max-h-96 overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-600/50 dark:scrollbar-thumb-gray-500/30 scrollbar-track-transparent hover:scrollbar-thumb-gray-600/70 dark:hover:scrollbar-thumb-gray-400/50">
               {maintenanceHistory.map((entry, index) => (
                 <div 
@@ -1121,11 +1078,20 @@ const App = () => {
                     </div>
                     <div className="text-right ml-3">
                       <div className={`text-sm font-bold ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-                        {entry.cost}€
+                        {(entry.cost*costMultiplier).toLocaleString()}€
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {entry.duration}
                       </div>
+                      {entry.planned ? (
+                        <div className="text-[10px] text-green-600 dark:text-green-400 mt-1">
+                          {`~${Math.round(entry.cost*costMultiplier * 1.8)}€ gespart`}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-yellow-600 dark:text-yellow-400 mt-1">
+                          {`~${Math.round(entry.cost*costMultiplier * 0.5)}€ vermeidbar`}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1142,123 +1108,176 @@ const App = () => {
           </div>
         </div>
 
-        {/* System Overview Chart */}
-        <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${
-          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
-        }`}>
-          <h2 className="text-xl font-semibold mb-6">Systemübersicht</h2>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={systemOverviewData}
-                barCategoryGap={20}
-              >
-                <CartesianGrid 
-                  strokeDasharray="3 3" 
-                  stroke={darkMode ? '#374151' : '#e5e7eb'} 
-                />
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fill: darkMode ? '#9ca3af' : '#4b5563' }}
-                />
-                <YAxis 
-                  tick={{ fill: darkMode ? '#9ca3af' : '#4b5563' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: darkMode ? '#1f2937' : 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  }}
-                />
-                <Legend wrapperStyle={{fontSize: '0.75rem'}} />
-                {/* Average metric values */}
-                <Bar dataKey="avg" name="Durchschnitt" radius={[4,4,0,0]} animationDuration={1500}>
-                  {systemOverviewData.map((entry,index)=>(
-                    <Cell key={`avg-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-                {/* Percentage of vehicles with warnings */}
-                <Bar dataKey="warn" name="% Warnungen" radius={[4,4,0,0]} fill="#dc2626" animationDuration={1500} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Timeline Graph Section */}
-        <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${
-          darkMode ? 'bg-gray-800 text-white' : 'bg-white'
-        }`}>
-          <h2 className="text-xl font-semibold mb-6">Ereignis-Timeline</h2>
-          {timeline.length === 0 ? (
-            <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-              Keine Ereignisse
-            </p>
-          ) : (
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{top: 20, right: 30, bottom: 20, left: 0}}>
-                  <CartesianGrid stroke={darkMode ? '#374151' : '#e5e7eb'} strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="time"
-                    type="number"
-                    domain={[warningData.concat(predictionData).length > 0 ? 'dataMin' : 0, 'dataMax']}
-                    tickFormatter={(t) => new Date(t).toLocaleTimeString()}
-                    tick={{ fill: darkMode ? '#9ca3af' : '#4b5563', fontSize: 12 }}
-                  />
-                  <YAxis
-                    dataKey="y"
-                    type="number"
-                    domain={[-0.5, 2.5]}
-                    ticks={[0, 1, 2]}
-                    tickFormatter={(v) => (v === 0 ? 'Wartung' : v === 1 ? 'Warnung' : 'Prognose')}
-                    tick={{ fill: darkMode ? '#9ca3af' : '#4b5563', fontSize: 12 }}
-                  />
-                  <Tooltip
-                    labelFormatter={(value) => new Date(value).toLocaleString()}
-                    cursor={{ strokeDasharray: '3 3' }}
-                    contentStyle={{
-                      backgroundColor: darkMode ? '#1f2937' : 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    }}
-                    formatter={(value, name, props) => [props.payload.desc, name]}
-                  />
-                  <Scatter name="Warnungen" data={warningData} fill="#ef4444" shape="triangle" />
-                  <Scatter name="Prognosen" data={predictionData} fill="#6366f1" shape="circle" />
-                  <Scatter name="Historie" data={historyData} fill="#9ca3af" shape="square" />
-                </ScatterChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-
-        {/* NEW: Vehicle Map */}
+        {/* Vehicle Map */}
         <div className={`rounded-xl shadow-lg p-6 mt-8 transition-colors duration-300 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>
-          <h2 className="text-xl font-semibold mb-4">Fahrzeugpositionen</h2>
-          <div className="w-full" style={{height:'40rem'}}>
-            <MapContainer center={mapCenter} zoom={6} scrollWheelZoom={false} className="h-full w-full rounded-lg">
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            Fahrzeugpositionen
+            <span onClick={()=>setShowDangerOnly(prev=>!prev)} className={`ml-3 text-sm font-medium px-2 py-0.5 rounded hidden sm:inline cursor-pointer ${showDangerOnly? 'bg-red-600 text-white':'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'}`}>
+              {routesInDangerCount}&nbsp;gefährdete Route{routesInDangerCount !== 1 ? 'n' : ''}
+            </span>
+          </h2>
+          <div id="vehicle-map" className="w-full" style={{height:'40rem'}}>
+            {selectedVehicle ? (
+              <div className="h-full w-full rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 select-none">
+                Karte deaktiviert
+              </div>
+            ) : (
+            <MapContainer ref={mapRef} center={mapCenter} zoom={6} scrollWheelZoom={true} className="h-full w-full rounded-lg">
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               {/* render routes and moving markers */}
-              {vehicles.map(v => v.route ? (
-                <Polyline key={v.id + "_line"} positions={v.route.map(p => [p.lat, p.lng])} pathOptions={{ color: '#3b82f6', weight: 2.5, dashArray: '6 4', opacity: 0.8 }} />
-              ) : null)}
-              {vehicles.map(v => (
-                <Marker key={v.id} position={[v.location.lat, v.location.lng]} icon={v.markerIcon}>
-                  <Popup>
-                    <div className="text-sm font-semibold">{v.name}</div>
-                    <div className="text-xs">{v.model} · {v.year}</div>
-                  </Popup>
-                </Marker>
-              ))}
+              {vehiclesForMap.map(v => {
+                if (!v.route) return null;
+                const inDanger = fleetPredictions.some(p => p.vehicleId === v.id && p.priority === 'Hoch');
+                return (
+                  <Polyline
+                    key={v.id + "_line"}
+                    positions={v.route.map(p => [p.lat, p.lng])}
+                    pathOptions={{
+                      color: inDanger ? '#ef4444' : '#3b82f6',
+                      weight: 2.5,
+                      dashArray: '6 4',
+                      opacity: 0.8,
+                    }}
+                  />
+                );
+              })}
+              {vehiclesForMap.map(v => {
+                const preds = fleetPredictions.filter(p => p.vehicleId === v.id);
+                const critical = preds.find(p => p.priority === 'Hoch');
+                // build icon with dynamic color based on critical status
+                const iconColor = critical ? '#ef4444' : '#2563eb';
+                const dynamicIcon = L.divIcon({
+                  html: renderToStaticMarkup(React.createElement(v.icon, { size: 24, color: iconColor })),
+                  className: '',
+                  iconSize: [24, 24],
+                  iconAnchor: [12, 12],
+                });
+                return (
+                  <Marker key={v.id} position={[v.location.lat, v.location.lng]} icon={dynamicIcon}>
+                    <Popup>
+                      <div className="text-sm font-semibold mb-1">{v.name}</div>
+                      <div className="text-xs mb-1">{v.model} · {v.year}</div>
+                      {critical ? (
+                        <div className="text-xs text-red-600 dark:text-red-400">
+                          <strong>{critical.component}</strong>: {critical.reason} • {critical.daysUntil}d
+                        </div>
+                      ) : preds.length ? (
+                        <div className="text-xs text-yellow-600 dark:text-yellow-400">
+                          {preds[0].component}: {preds[0].priority} • {preds[0].daysUntil}d
+                        </div>
+                      ) : (
+                        <div className="text-xs text-green-600 dark:text-green-400">Keine kritischen Prognosen</div>
+                      )}
+                    </Popup>
+                  </Marker>
+                );
+              })}
             </MapContainer>
+            )}
           </div>
         </div>
+      {selectedVehicle && createPortal(
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-[99999]" onClick={closeVehicleModal}>
+          <div className={`relative rounded-xl shadow-xl ${darkMode? 'bg-gray-800 text-white':'bg-white'} p-8 w-full max-w-xl mx-4`} onClick={e=>e.stopPropagation()}>
+            <button onClick={closeVehicleModal} className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+              <X size={18}/>
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              {React.createElement(selectedVehicle.icon,{size:28,className:"text-blue-600 dark:text-blue-400"})}
+              <h3 className="text-lg font-semibold">{selectedVehicle.name}</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {Object.entries(selectedVehicle.metrics).map(([k,val])=>{
+                const cfg=vehicleConfigs[k];
+                return (
+                  <div key={k} className="flex items-center gap-2 text-sm">
+                    <span style={{color:cfg.color}}>{cfg.icon}</span>
+                    <span>{cfg.name}: <strong>{val.toFixed(1)}{cfg.unit}</strong></span>
+                  </div>
+                );
+              })}
+            </div>
+            {selectedVehicle && (
+              <p className="text-xs opacity-70">Kilometerstand: {selectedVehicle.mileage.toLocaleString()} km | letzte Wartung: {selectedVehicle.lastServiceDate}</p>
+            )}
+            {(()=>{
+              const preds = fleetPredictions.filter(p=>p.vehicleId===selectedVehicle.id);
+              if(preds.length===0) return null;
+              return (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2">Prognosen</h4>
+                  <table className="text-xs w-full max-h-40 overflow-y-auto pr-2">
+                    <tbody>
+                  {preds.map((p,i)=>(
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-0.5 pr-2 whitespace-nowrap">{p.component}</td>
+                      <td className="py-0.5 pr-2"><span className="text-green-500">{p.recommendedMaintenanceDays}d</span></td>
+                      <td className="py-0.5"><span className="text-red-500">{p.daysUntil}d</span></td>
+                    </tr>
+                  ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+            <div className="mt-6 flex justify-end">
+              <button onClick={()=>{
+                closeVehicleModal();
+                const mapSec=document.getElementById('vehicle-map');
+                if(mapSec) mapSec.scrollIntoView({behavior:'smooth'});
+                if(mapRef.current){
+                  mapRef.current.flyTo([selectedVehicle.location.lat, selectedVehicle.location.lng], 8);
+                }
+              }} className="text-sm px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow">
+                Auf Karte anzeigen
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {showDisclaimer && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '1rem',
+            right: '1rem',
+            background: 'rgba(17, 24, 39, 0.9)', // approx Tailwind gray-900 @ 90%
+            color: '#fff',
+            fontSize: '0.75rem',
+            padding: '0.5rem 1rem',
+            borderRadius: '0.5rem',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            zIndex: 200000,
+            maxWidth: '28rem',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.5rem',
+          }}
+        >
+          <span style={{ lineHeight: '1.2' }}>
+            Disclaimer: <br/> Projektarbeit · Gruppe 8 · Aufbau eines Predictive Maintenance Models für die Vorhersage von Maschinen-Ausfällen · Modul "Anwendungsfelder Business Analytics" · 2025-SS · MKBA WS24 DLS
+          </span>
+          <button
+            onClick={() => setShowDisclaimer(false)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              fontSize: '0.9rem',
+              lineHeight: '1',
+              cursor: 'pointer',
+            }}
+            aria-label="Disclaimer schließen"
+          >
+            ×
+          </button>
+        </div>,
+        document.body
+      )}
       </div>
     </div>
   );
