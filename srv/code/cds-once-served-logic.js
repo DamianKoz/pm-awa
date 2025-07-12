@@ -14,7 +14,8 @@ module.exports = async function(MaintainanceService) {
     // 1. Initialize x vehicles
     const vehicles = await SELECT.from(Vehicles)
     if (vehicles.length === 0) {
-        const mockedVehiclesCount = 2
+        const mockedVehiclesCount = 3;
+        const initalSimulationsInPast = 10;
         for (let i = 0; i < mockedVehiclesCount; i++) {
             const vehicle = await MaintainanceService.RegisterVehicle({})
             const route = await MaintainanceService.CreateRoute('Vehicles', vehicle.ID)

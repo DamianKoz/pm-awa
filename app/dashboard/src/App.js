@@ -53,6 +53,10 @@ const App = () => {
   const [vehicles, setVehicles] = useState([]);
   const [fleetPredictions, setFleetPredictions] = useState([]);
   const [maintenanceHistory, setMaintenanceHistory] = useState([]);
+  const [sensors, setSensors] = useState([]); // telemetry sensors metadata
+  const [expandedSensor, setExpandedSensor] = useState(null); // currently expanded sensor ID
+  const [loading, setLoading] = useState(true); // initial load indicator
+  const speedInitialized = useRef(false); // flag to avoid posting initial value
 
   // Timeline of issues/warnings
   const [timeline, setTimeline] = useState([]); // {time, title, description, type}
@@ -66,6 +70,7 @@ const App = () => {
 
   // track which vehicle routes are currently being fetched to avoid duplicate requests
   const routeFetchInProgress = useRef(new Set());
+  const wsDebounceRef = useRef(null); // debounce timer for websocket refresh
 
   // Calculate predictions based on sensor values
   const calculateFleetPredictions = useCallback(() => {
@@ -241,15 +246,21 @@ const App = () => {
    */
   const fetchBackendData = useCallback(async () => {
     try {
-      // 1) Vehicles with metrics and full route geometry
+      // Fetch vehicles & sensors concurrently
       const expand = [
         'model',
         'metrics($expand=sensor)',
         'activeRoute($expand=geometry($select=*))'
       ].join(',');
-      const vehiclesRes = await fetch(`${API_BASE}/Vehicles?$expand=${expand}`);
-      const vehiclesJson = await vehiclesRes.json();
+
+      const [vehiclesJson, sensorsJson] = await Promise.all([
+        fetch(`${API_BASE}/Vehicles?$expand=${expand}`).then(r=>r.json()),
+        fetch(`${API_BASE}/Sensors?$select=ID,name,unit,warnLow,warnHigh,criticalLow,criticalHigh,reference,min,max`).then(r=>r.json())
+      ]);
+
       const vehiclesArr = vehiclesJson.value ?? vehiclesJson;
+      const sensorsArr = sensorsJson.value ?? sensorsJson;
+      setSensors(sensorsArr);
 
       // Helper to build Leaflet icons (reuse existing logic)
       const buildMarkerIcon = (IconComp) => {
@@ -272,8 +283,8 @@ const App = () => {
 
         // pick vehicle location: prefer live latitude/longitude, else first route point
         const currentLocation = {
-          lat: v.latitude ?? (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lat),
-          lng: v.longitude ?? (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lng),
+          lat: v.latitude !== undefined && v.latitude !== null ? Number(v.latitude) : (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lat),
+          lng: v.longitude !== undefined && v.longitude !== null ? Number(v.longitude) : (routeCoords && routeCoords[(v.activeRouteIndex ?? 0) % routeCoords.length]?.lng),
         };
 
         const icon = Truck; // generic icon – refine if needed
@@ -330,10 +341,13 @@ const App = () => {
       setVehicles(builtVehicles);
       prevVehiclesRef.current = builtVehicles;
 
-      // 4) Predictions
+      // 4) Predictions & maintenance in parallel
       try {
-        const predRes = await fetch(`${API_BASE}/Predictions?$expand=vehicle,component`);
-        const predJson = await predRes.json();
+        const [predJson, maintJson] = await Promise.all([
+          fetch(`${API_BASE}/Predictions?$expand=vehicle,component`).then(r=>r.json()),
+          fetch(`${API_BASE}/Maintenances?$expand=vehicle,component`).then(r=>r.json())
+        ]);
+
         const predArr = (predJson.value ?? predJson).map((p) => ({
           component: p.component?.name ?? 'Komponente',
           daysUntil: p.latestMaintenanceAt ? Math.max(1, Math.round((new Date(p.latestMaintenanceAt) - Date.now()) / 864e5)) : 0,
@@ -344,15 +358,8 @@ const App = () => {
           vehicleId: p.vehicle_ID,
         }));
         setFleetPredictions(predArr);
-      } catch (e) {
-        console.error('Predictions fetch failed', e);
-      }
 
-      // 5) Maintenance history
-      try {
-        const maintRes = await fetch(`${API_BASE}/Maintenances?$expand=vehicle,component`);
-        const maintJson = await maintRes.json();
-        const maintArr = maintJson.value ?? maintJson;
+        const maintArr = (maintJson.value ?? maintJson);
         const history = maintArr.map((m) => ({
           date: m.performedOn ?? m.createdAt ?? new Date().toISOString(),
           component: m.component?.name ?? 'Komponente',
@@ -367,18 +374,49 @@ const App = () => {
         }));
         setMaintenanceHistory(history);
       } catch (e) {
-        console.error('Maintenance history fetch failed', e);
+        console.error('Predictions/maintenance fetch failed', e);
       }
+      setLoading(false);
     } catch (err) {
       console.error('Backend fetch failed', err);
+      setLoading(false);
     }
   }, []);
 
-  // Initial load + periodic refresh every 20 s
+  // Initial load then refresh via WebSocket events
   useEffect(() => {
     fetchBackendData();
-    const iv = setInterval(fetchBackendData, 20000);
-    return () => clearInterval(iv);
+
+    // build ws URL from backend base
+    try {
+      const wsBase = BACKEND_BASE_URL.replace(/^http/i,'ws');
+      const ws = new WebSocket(`${wsBase}/ws/WebSocketService`);
+
+      ws.onopen = () => console.info('WebSocket connected');
+      ws.onmessage = (ev) => {
+        // debounce: allow max 2 refreshes / second
+        const trigger = () => {
+          if (wsDebounceRef.current) return; // already scheduled
+          wsDebounceRef.current = setTimeout(() => {
+            fetchBackendData();
+            wsDebounceRef.current = null;
+          }, 500); // 500 ms => max 2/s
+        };
+
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg?.event === 'VehicleChanged' || msg?.type === 'VehicleChanged') trigger();
+        } catch {
+          trigger(); // non-JSON payload – still treat as update
+        }
+      };
+      ws.onerror = console.error;
+      ws.onclose = () => console.info('WebSocket closed');
+
+      return () => ws.close();
+    } catch(e) {
+      console.error('WebSocket init failed', e);
+    }
   }, [fetchBackendData]);
 
   // Slider controlled vehicle count
@@ -482,10 +520,26 @@ const App = () => {
     };
   });
 
+  // Align simulation speed with backend interval on first mount
+  useEffect(()=>{
+    fetch(`${API_BASE}/GetSimulationStepInterval`)
+      .then(r=>r.json())
+      .then(data=>{
+        const interval = Number(data?.interval ?? data?.value ?? data);
+        if(interval && !isNaN(interval)) {
+          const speed = +(1000/interval).toFixed(2);
+          setSimulationSpeed(speed);
+          speedInitialized.current = true;
+        }
+      })
+      .catch(()=>{});
+  },[]);
 
-  // when user drags "Tempo" slider
+  // when user drags "Tempo" slider -> push to backend
   useEffect(() => {
-    const intervalMs = Math.round(1000 / simulationSpeed);   // e.g. 1× → 1000 ms, 2× → 500 ms, 0.5× → 2000 ms
+    if (!speedInitialized.current) return; // skip initial set
+    if (isNaN(simulationSpeed) || simulationSpeed <= 0) return;
+    const intervalMs = Math.round(1000 / simulationSpeed);
     fetch(`${API_BASE}/SetSimulationStepInterval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -582,26 +636,17 @@ const App = () => {
                 <input
                   type="number"
                   min="0.25"
-                  max="10"
+                  max="100"
                   step="0.25"
-                  value={simulationSpeed}
+                  value={simulationSpeed.toFixed(2)}
                   onChange={(e)=>{
                     const val = parseFloat(e.target.value);
-                    if(!isNaN(val)) setSimulationSpeed(Math.min(10, Math.max(0.25, val)));
+                    if(!isNaN(val)) setSimulationSpeed(Math.min(100, Math.max(0.25, val)));
                   }}
-                  className="w-16 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
+                  className="w-20 p-1 border rounded text-sm dark:bg-gray-700 dark:border-gray-600"
                 />
                 <span className="text-sm">x</span>
-                <datalist id="speedTicks">
-                  <option value="0.25"/>
-                  <option value="0.5"/>
-                  <option value="1"/>
-                  <option value="2"/>
-                  <option value="4"/>
-                  <option value="6"/>
-                  <option value="8"/>
-                  <option value="10"/>
-                </datalist>
+                <span className="text-xs text-gray-500">({Math.round(1000/simulationSpeed)} ms)</span>
               </div>
               <button
                 onClick={resetVehicles}
@@ -615,21 +660,43 @@ const App = () => {
 
           {/* Threshold chips with mock distribution tooltip */}
           <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 select-none">
-              <FlaskConical size={12}/> ML&nbsp;Thresholds
-            </span>
-            {[
-              {label:'Temp > 90°C', bg:'#fee2e2', fg:'#b91c1c', mean:75, sd:7, unit:'°C'},
-              {label:'Öl < 20%', bg:'#fef9c3', fg:'#92400e', mean:65, sd:15, unit:'%'},
-              {label:'Druck < 90 bar', bg:'#dbeafe', fg:'#1e40af', mean:110, sd:10, unit:'bar'},
-              {label:'Batterie < 20%', bg:'#ede9fe', fg:'#5b21b6', mean:60, sd:20, unit:'%'}
-            ].map((t,i)=>(
-              <span key={i} style={{backgroundColor:t.bg,color:t.fg}} className="relative group px-2 py-1 rounded-full select-none text-[11px] cursor-default">
-                {t.label}
-              </span>
-            ))}
+            <div className="flex items-center gap-1 text-indigo-700 dark:text-indigo-200 font-semibold text-sm select-none">
+              <FlaskConical size={14}/> Telemetry&nbsp;Sensoren
+            </div>
+            {sensors.map((s)=>{
+              const label = s.name;
+              return (
+                <button
+                  key={s.ID}
+                  onClick={()=> setExpandedSensor(expandedSensor===s.ID? null : s.ID)}
+                  className={`px-2 py-1 rounded-full text-[11px] transition-colors select-none ${expandedSensor===s.ID ? 'bg-blue-600 text-white' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200'}`}
+                  title={`${s.unit || ''}  min:${s.min ?? '-'} max:${s.max ?? '-'} \nwarnLow:${s.warnLow ?? '-'} warnHigh:${s.warnHigh ?? '-'} \ncritLow:${s.criticalLow ?? '-'} critHigh:${s.criticalHigh ?? '-'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
+          {expandedSensor && (()=>{
+            const sen = sensors.find(x=>x.ID===expandedSensor);
+            if(!sen) return null;
+            return (
+              <div className="mt-4 p-4 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-[11px] space-y-1 max-w-full overflow-x-auto">
+                <div><strong>Name:</strong> {sen.name}</div>
+                {sen.unit && <div><strong>Einheit:</strong> {sen.unit}</div>}
+                <div><strong>Min / Max:</strong> {sen.min ?? '-'} {sen.unit} – {sen.max ?? '-'} {sen.unit}</div>
+                <div><strong>Warnschwelle:</strong> {sen.warnLow ?? '-'} / {sen.warnHigh ?? '-'}</div>
+                <div><strong>Kritisch:</strong> {sen.criticalLow ?? '-'} / {sen.criticalHigh ?? '-'}</div>
+                {sen.reference && <div><strong>Referenz:</strong> {sen.reference}</div>}
+              </div>
+            );
+          })()}
         </div>
+
+        {/* Loading Spinner */}
+        {loading && (
+          <div className="flex justify-center items-center py-20 text-indigo-600">Lade Daten…</div>
+        )}
 
         {/* Sensors Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 mb-8">
@@ -1000,7 +1067,7 @@ const App = () => {
               {vehicles.map(v => v.route ? (
                 <Polyline key={v.id + "_line"} positions={v.route.map(p => [p.lat, p.lng])} pathOptions={{ color: '#3b82f6', weight: 2.5, dashArray: '6 4', opacity: 0.8 }} />
               ) : null)}
-              {vehicles.map(v => (
+              {vehicles.filter(v=> !isNaN(v.location?.lat) && !isNaN(v.location?.lng)).map(v => (
                 <Marker key={v.id} position={[v.location.lat, v.location.lng]} icon={v.markerIcon}>
                   <Popup>
                     <div className="text-sm font-semibold">{v.name}</div>

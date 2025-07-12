@@ -1,13 +1,13 @@
 /**
  * Mock rule-based prediction
  *
- * @ON CreatePrediction on entity Vehicles
+ * @ON Predict on entity Vehicles
  */
 module.exports = async function (req) {
 	const {
 		Vehicles,
 		Telemetry,
-		TelemetrySensors,
+		Sensors,
 		TelemetrySensorAffectedComponents,
 		VehicleComponents,
 		Predictions,
@@ -22,7 +22,7 @@ module.exports = async function (req) {
 	if (!vehicle) req.error(404, `Vehicle ${ID} not found`)
 
 	/* 2. sensor catalogue (+ component map) -------------------------------- */
-	const sensors = await SELECT.from(TelemetrySensors)
+	const sensors = await SELECT.from(Sensors)
 	const compMap = await SELECT.from(TelemetrySensorAffectedComponents)
 		.columns(`sensor_ID`, `component_ID`)
 	const compOf = Object.fromEntries(compMap.map(m => [m.sensor_ID, m.component_ID]))

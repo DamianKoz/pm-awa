@@ -17,21 +17,21 @@ service MaintainanceService {
 
         action MeasureAllTelemetry
         (
+            simulationDateTime : DateTime,
         ) returns many Telemetry;
 
-        action CreatePrediction
+        action Predict
         (
         ) returns Predictions;
     };
     entity Telemetry as projection on my.Telemetry;
-    entity Warnings as projection on my.Warnings;
     entity Predictions as projection on my.Predictions;
     entity Maintenances as projection on my.Maintenances;
     entity Locations as projection on my.Locations;
     entity Routes as projection on my.Routes;
-    entity TelemetrySensors as projection on my.TelemetrySensors;
+    entity Sensors as projection on my.Sensors;
     entity VehicleComponents as projection on my.VehicleComponents;
-    entity TelemetrySensorAffectedComponents as projection on my.TelemetrySensorAffectedComponents;
+    entity Failures as projection on my.Failures;
     entity VehicleModels as projection on my.VehicleModels;
 
 
@@ -42,9 +42,13 @@ service MaintainanceService {
         longitude : Decimal(9,6),
     ) returns Vehicles;
 
-    action SetSimulationStepInterval
+    action SetSimulationStepInterval // Action = POST
     (
         interval : Integer
             @mandatory,
     );
+
+    function GetSimulationStepInterval // Function = GET
+    (
+    ) returns Integer;
 }

@@ -26,9 +26,9 @@ entity Vehicles : cuid, managed {
 
   /* Associations */
   metrics      : Composition of many Telemetry   on metrics.vehicle = $self;
-  predictions  : Composition of many Predictions on predictions.vehicle = $self;
-  activePrediction : Association to one Predictions;
-  maintenanceHistory : Composition of many Maintenances on maintenanceHistory.vehicle = $self;
+  prediction  : Composition of one Predictions on prediction.vehicle = $self;
+  maintenances : Composition of many Maintenances on maintenances.vehicle = $self;
+  failures : Composition of many Failures on failures.vehicle = $self;
   routes       : Composition of many Routes on routes.vehicle = $self;
   activeRoute  : Association to one Routes;
 }
@@ -59,11 +59,11 @@ entity RouteGeometry {
 
 entity Telemetry : cuid, managed {
   vehicle       : Association to Vehicles;
-  sensor        : Association to TelemetrySensors;
+  sensor        : Association to Sensors;
   value         : Decimal(9,3);
 }
 
-entity TelemetrySensors : cuid {
+entity Sensors : cuid {
   name : String;
   unit : String;
   min : Decimal(9,3);
@@ -74,49 +74,62 @@ entity TelemetrySensors : cuid {
   warnHigh : Decimal(9,3);
   criticalLow : Decimal(9,3);
   criticalHigh : Decimal(9,3);
-  affectedComponents : Composition of many TelemetrySensorAffectedComponents on affectedComponents.sensor = $self;
+  measurements : Composition of many Telemetry on measurements.sensor = $self;
 }
 
-entity TelemetrySensorAffectedComponents : cuid {
-  sensor : Association to TelemetrySensors;
-  component : Association to VehicleComponents;
+entity ComponentDefinitions : cuid {
+  name : String;
 }
 
 entity VehicleComponents : cuid {
-  affectedSensors : Composition of many TelemetrySensorAffectedComponents on affectedSensors.component = $self;
-  name : String;
-  description : String;
-}
-
-entity Warnings : cuid, managed {
-  vehicle       : Association to Vehicles;
-  sensor        : Association to TelemetrySensors;
-  value         : Decimal(9,3);
-  triggeredAt   : Timestamp;
-  cleared       : Boolean default false;
+  vehicle : Association to one Vehicles not null;
+  definition : Association to ComponentDefinitions not null;
 }
 
 entity Predictions : cuid, managed {
-  vehicle       : Association to Vehicles;
-  component     : Association to VehicleComponents;
+  vehicle       : Association to one Vehicles not null;
+  affectedComponents     : many {
+    component : Association to one VehicleComponents not null;
+  };
   recommendedMaintenanceAt : DateTime;
   latestMaintenanceAt      : DateTime;
   recommendedMaintainanceConfidence    : Decimal(9,3);
   latestMaintainanceConfidence      : Decimal(9,3);
-  priority      : String enum { High; Medium; Low; };
   reason        : String;
   description   : String;
+  class : Association to PredictionClasses not null;
+}
+
+entity PredictionClasses 
+{
+  key ID : String;
+  name : String;
+  priority      : String enum { High; Medium; Low; };
 }
 
 entity Maintenances : cuid, managed {
-  vehicle       : Association to Vehicles;
-  component     : Association to VehicleComponents;
+  vehicle       : Association to one Vehicles not null;
+  affectedComponents     : many {
+    component : Association to one VehicleComponents not null;
+  };
   planned       : Boolean;
   status        : String enum { Open; InProgress; Completed; };
   cost          : Decimal(15,2);
   duration      : Decimal(5,2);
   description   : String;
   performedOn   : Date;
+  causedBy : String enum { Prediction; Failure; Scheduled; };
+  prediction : Association to one Predictions; // if caused by prediction, otherwise null
+  failure : Association to one Failures; // if caused by failure, otherwise null
+}
+
+entity Failures : cuid, managed {
+  vehicle       : Association to one Vehicles not null;
+  affectedComponents     : many {
+    component : Association to one VehicleComponents not null;
+  };
+  description   : String;
+  occurredOn   : Date;
 }
 
 entity Locations : cuid {

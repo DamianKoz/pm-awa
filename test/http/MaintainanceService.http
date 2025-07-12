@@ -2,6 +2,15 @@
 @username=alice
 @password=
 
+
+### getsimulationstepinterval
+# @name getsimulationstepinterval
+GET {{server}}/service/MaintainanceService/GetSimulationStepInterval
+Content-Type: application/json
+Authorization: Basic {{username}} {{password}}
+
+
+
 ### setsimulationstepinterval
 # @name setsimulationstepinterval
 POST {{server}}/service/MaintainanceService/SetSimulationStepInterval
@@ -58,9 +67,9 @@ GET {{server}}/service/MaintainanceService/Vehicles?$expand=metrics
 Authorization: Basic {{username}} {{password}}
 
 
-### TelemetrySensors 
+### Sensors 
 # @name TelemetrySensors_GET
-GET {{server}}/service/MaintainanceService/TelemetrySensors
+GET {{server}}/service/MaintainanceService/Sensors
 Authorization: Basic {{username}} {{password}}
 
 

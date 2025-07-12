@@ -5,7 +5,7 @@
 */
 module.exports = async function (req) {
 
-	const { Vehicles, Telemetry, TelemetrySensors } = cds.entities
+	const { Vehicles, Telemetry, Sensors } = cds.entities
 	const ID = req.params.at(-1).ID
 
 	const vehicle = await SELECT.one(Vehicles, ID)
@@ -14,7 +14,7 @@ module.exports = async function (req) {
 	}
 
 	// we need to mock measurement of x telemetry sensors. What sensors do we mock?
-	const sensors = await SELECT.from(TelemetrySensors)
+	const sensors = await SELECT.from(Sensors)
 	if (sensors.length === 0) {
 		throw new Error('No telemetry sensors found.')
 	}

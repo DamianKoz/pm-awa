@@ -4,6 +4,7 @@
  * @param {Object} request - User information, tenant-specific CDS model, headers and query parameters
 */
 module.exports = async function (req) {
+	const simulationDateTime = req.data.simulationDateTime || new Date();
 	const LOGGER = cds.log('simulation-step')
 	try {
 		const { Vehicles } = cds.entities
@@ -20,11 +21,18 @@ module.exports = async function (req) {
 		for (const vehicle of vehicles) {
 			// move vehicle to the next coordinate on the route if it has an active route
 			if (vehicle.activeRoute) {
+				if (vehicle.activeRouteIndex >= vehicle.activeRoute.geometry.coordinatesCount - 1) {
+					// vehicle has reached the destination
+					await UPDATE(Vehicles, vehicle.ID).with({ activeRouteIndex: null, activeRoute: null, isMoving: false })
+					continue
+				}
+				const currentCoordinate = vehicle.activeRoute.geometry.coordinates[vehicle.activeRouteIndex]
 				const nextCoordinate = vehicle.activeRoute.geometry.coordinates[vehicle.activeRouteIndex + 1]
-				await UPDATE(Vehicles, vehicle.ID).with({ activeRouteIndex: vehicle.activeRouteIndex + 1, latitude: nextCoordinate.latitude, longitude: nextCoordinate.longitude })
+				const distance = calculateDistance(currentCoordinate.latitude, currentCoordinate.longitude, nextCoordinate.latitude, nextCoordinate.longitude)
+				await UPDATE(Vehicles, vehicle.ID).with({ activeRouteIndex: vehicle.activeRouteIndex + 1, latitude: nextCoordinate.latitude, longitude: nextCoordinate.longitude, isMoving: true })
 			}
-			await MaintainanceService.MeasureAllTelemetry('Vehicles', vehicle.ID)
-			await MaintainanceService.CreatePrediction('Vehicles', vehicle.ID)
+			await MaintainanceService.MeasureAllTelemetry('Vehicles', vehicle.ID, { simulationDateTime : simulationDateTime })
+			await MaintainanceService.Predict('Vehicles', vehicle.ID )
 			// webSocketLOG.info(`Emitting ${eventName} event for Vehicle: ${vehicle.ID}`)
 			WebSocketService.emit(eventName, {
 				ID: vehicle.ID,
@@ -39,6 +47,15 @@ module.exports = async function (req) {
 	} catch (error) {
 		LOGGER.error(`Simulation step failed: ${error}`)
 	}
+}
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+	const R = 6371; // Radius of the earth in km
+	const dLat = (lat2 - lat1) * (Math.PI / 180);
+	const dLon = (lon2 - lon1) * (Math.PI / 180);
+	const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	return R * c;
 }
 
 

@@ -2,20 +2,4 @@ ID,name,unit,min,max,reference,warnLow,criticalLow,warnHigh,criticalHigh,descrip
 0ba0a255-3cd6-4424-8e6d-87cff4f9f983,Engine Coolant Temperature,°C,60,120,90,,,100,110,Temperature of the engine coolant
 f038f5a0-a13f-4cf7-8365-f0f3508fa7a8,Engine Oil Level,%,0,100,80,50,30,,,"Remaining engine-oil level"
 baa2e015-e5d3-4f6f-bf38-38083f3444b6,Tyre Pressure,bar,6.0,9.0,8.0,7.0,6.5,8.7,9.0,Current tyre pressure (truck tyres)
-9d1086d8-2c1f-4bc1-b16b-5664dbe7ab38,Battery SOC,%,0,100,75,40,20,,,"Starter-battery state of charge"
-e3b94b79-678a-41d0-bf0b-4c44d9375c3c,Fuel Level,%,0,100,50,15,5,,,"Fuel remaining in main tank"
-12452b2a-7a6e-47ef-993d-5f4477ae7096,Vehicle Speed,km/h,0,160,80,,,,,Instantaneous ground speed
-f4f4fa8a-1aee-4c9b-8b93-316f480e0255,Engine RPM,rpm,600,3000,1500,700,,2400,2700,Crankshaft revolutions per minute
 8d9a0b55-2db1-4f0e-9eb9-3011d71e0692,Brake Pad Thickness,mm,0.0,20.0,15.0,6.0,3.0,,,"Remaining brake-pad material on front axle
-c2e5ef94-fd73-43c7-8a8f-af2c02e4bb37,Battery Voltage,V,11.0,15.0,13.2,12.0,11.5,14.2,14.5,Electrical system voltage
-b327e1eb-3a05-4a5c-97a9-37e672064c81,Transmission Oil Temperature,°C,60,140,95,,,110,125,Temperature of transmission fluid
-a3a10b7d-bcc4-4c8e-8f00-edd8f7a47c34,Axle Load,kg,0,12000,8000,,,10000,11000,Measured load on drive axle
-ce5e9c44-5d08-4466-8a46-9ff2f6b7fe47,GPS Altitude,m,-150,3000,50,,,,,Altitude above mean sea level
-e609f685-9887-4dbc-86ba-5bb98c0fd985,AdBlue Level,%,0,100,60,20,10,,,"Urea-solution level"
-fa08e3d2-7d16-46be-9ffb-9c5f40d1a2a1,Steering Angle,°,-540,540,0,,,,,Current steering-wheel angle
-8f81cd32-9119-4d76-bf51-3d94ff5bce08,Longitudinal Acceleration,m/s²,-8.0,8.0,0,,,4.0,6.0,Forward/backward acceleration
-e7193ebd-2ff9-4401-8ddd-9dd9f7a3e78b,Shock Sensor,g,0.0,4.0,0.5,,,2.0,3.0,Peak vibration (g-force)
-bdc9d638-14a2-4a40-b7aa-393773ae3597,Ambient Temperature,°C,-40,50,20,,,,,Outside air temperature
-5a59e0a8-7207-42a6-98da-8b48fde31b0e,Humidity,%,0,100,45,15,,70,85,Relative humidity inside cabin
-2fb586bd-e5d0-400e-bfece345f909,DPF Differential Pressure,kPa,0.0,100.0,20.0,,,60.0,80.0,Pressure drop across diesel particulate filter
-310b7e7c-3fd3-4f4c-8d37-a5d52b941ce2,NOx Concentration,ppm,0,1000,200,,,600,800,NOx sensor reading in exhaust stream

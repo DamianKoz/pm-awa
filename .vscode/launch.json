@@ -2,15 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "cds serve",
+      "name": "cds watch",
       "request": "launch",
       "type": "node",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "cds",
       "args": [
-        "serve",
-        "--with-mocks",
-        "--in-memory?"
+        "watch"
       ],
       "skipFiles": [
         "<node_internals>/**"
